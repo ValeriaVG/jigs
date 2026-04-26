@@ -1,23 +1,29 @@
 [workspace]
-# All four publishable crates share the workspace version, so bumps stay in
-# lockstep. release-plz will publish them in dependency order automatically.
+# Default everything off; the four publishable crates opt in below.
+# Any new example added to the workspace is automatically ignored.
+release = false
+publish = false
 dependencies_update = true
 git_release_enable = true
-publish_allow_dirty = false
-
-# A single GitHub release per workspace bump, named after the workspace version.
 git_tag_name = "v{{ version }}"
 git_release_name = "v{{ version }}"
 
-# Skip the example crates entirely.
 [[package]]
-name = "jigs-example-hello"
-release = false
+name = "jigs-core"
+release = true
+publish = true
 
 [[package]]
-name = "jigs-example-http"
-release = false
+name = "jigs-macros"
+release = true
+publish = true
 
 [[package]]
-name = "jigs-example-async"
-release = false
+name = "jigs-trace"
+release = true
+publish = true
+
+[[package]]
+name = "jigs"
+release = true
+publish = true
