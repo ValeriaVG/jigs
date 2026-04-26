@@ -80,17 +80,23 @@ async fn run_bench(label: &str, n: usize, io_micros: u64) {
 async fn main() {
     if std::env::var("JIGS_MAP").is_ok() {
         let dir = env!("CARGO_MANIFEST_DIR");
+        let html_dir = format!("{dir}/../../docs/checkout");
+        std::fs::create_dir_all(&html_dir).expect("create docs/checkout");
         std::fs::write(
-            format!("{dir}/map.html"),
-            jigs::map::to_html(Some("handle"), "checkout example", None),
+            format!("{html_dir}/index.html"),
+            jigs::map::to_html(
+                Some("handle"),
+                "checkout example",
+                Some("https://github.com/ValeriaVG/jigs/blob/main/{path}#L{line}"),
+            ),
         )
-        .expect("write map.html");
+        .expect("write index.html");
         std::fs::write(
             format!("{dir}/map.md"),
             jigs::map::to_markdown(Some("handle"), "checkout example"),
         )
         .expect("write map.md");
-        eprintln!("wrote {dir}/map.html and map.md");
+        eprintln!("wrote {html_dir}/index.html and {dir}/map.md");
         return;
     }
 

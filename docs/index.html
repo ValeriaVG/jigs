@@ -1,0 +1,519 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>jigs — explicit pipelines for Rust</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="A small Rust framework for building explicit, composable request to response pipelines, with interactive maps generated at compile time.">
+<style>
+  :root {
+    --bg: #fafaf9;
+    --canvas: #f5f5f4;
+    --fg: #1c1917;
+    --muted: #78716c;
+    --line: #e7e5e4;
+    --line-strong: #d6d3d1;
+    --card: #ffffff;
+    --code-bg: #f5f5f4;
+    --code-fg: #1c1917;
+    --accent: #4338ca;
+    --accent-hover: #3730a3;
+    --focus: #4338ca;
+    --warn-bg: #fef3c7;
+    --warn-border: #fcd34d;
+    --warn-fg: #78350f;
+    --shadow: 0 1px 2px rgba(28,25,23,.04), 0 1px 1px rgba(28,25,23,.03);
+    --shadow-hover: 0 2px 6px rgba(28,25,23,.06), 0 1px 2px rgba(28,25,23,.04);
+    --radius: 6px;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0c0a09;
+      --canvas: #1c1917;
+      --fg: #f5f5f4;
+      --muted: #a8a29e;
+      --line: #292524;
+      --line-strong: #44403c;
+      --card: #1c1917;
+      --code-bg: #1c1917;
+      --code-fg: #f5f5f4;
+      --accent: #a78bfa;
+      --accent-hover: #c4b5fd;
+      --focus: #c4b5fd;
+      --warn-bg: #422006;
+      --warn-border: #78350f;
+      --warn-fg: #fcd34d;
+      --shadow: 0 1px 2px rgba(0,0,0,.5), 0 1px 1px rgba(0,0,0,.4);
+      --shadow-hover: 0 2px 8px rgba(0,0,0,.6), 0 1px 2px rgba(0,0,0,.5);
+      color-scheme: dark;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    font: 15px/1.65 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    color: var(--fg);
+    background: var(--bg);
+  }
+  a { color: var(--accent); }
+  a:hover { color: var(--accent-hover); }
+
+  nav.top {
+    position: sticky; top: 0; z-index: 10;
+    background: color-mix(in srgb, var(--bg) 92%, transparent);
+    backdrop-filter: saturate(180%) blur(8px);
+    border-bottom: 1px solid var(--line);
+  }
+  .nav-inner {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 12px 24px;
+    display: flex; align-items: center; gap: 18px;
+  }
+  .logo {
+    font-weight: 700; font-size: 15px; letter-spacing: -0.01em;
+    color: var(--fg); text-decoration: none;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .logo-mark {
+    display: inline-block; width: 18px; height: 18px;
+    border-radius: 4px;
+    background: linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 60%, var(--fg)));
+  }
+  nav.top ul {
+    list-style: none; display: flex; gap: 18px; margin: 0; padding: 0;
+    margin-left: auto;
+    font-size: 14px;
+  }
+  nav.top a.navlink {
+    color: var(--muted); text-decoration: none;
+  }
+  nav.top a.navlink:hover { color: var(--fg); }
+  .gh-link {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 4px 10px;
+    border: 1px solid var(--line-strong);
+    border-radius: var(--radius);
+    color: var(--fg) !important;
+    font-size: 13px;
+  }
+  .gh-link:hover { background: var(--canvas); }
+
+  main {
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 56px 24px 80px;
+  }
+
+  .hero { margin-bottom: 36px; }
+  .eyebrow {
+    font-size: 11px; font-weight: 600; letter-spacing: .12em;
+    text-transform: uppercase; color: var(--accent);
+    margin: 0 0 12px;
+  }
+  h1 {
+    font-size: 40px; line-height: 1.1; margin: 0 0 14px;
+    letter-spacing: -0.02em;
+  }
+  .tagline {
+    font-size: 17px; color: var(--muted); margin: 0 0 22px;
+    max-width: 60ch;
+  }
+
+  .badges {
+    display: flex; flex-wrap: wrap; gap: 6px;
+    margin: 0 0 24px;
+  }
+  .badge {
+    display: inline-flex; align-items: center;
+    font-size: 11.5px; font-weight: 500;
+    padding: 3px 10px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    color: var(--muted);
+    background: var(--card);
+    text-decoration: none;
+  }
+  .badge:hover { color: var(--fg); border-color: var(--line-strong); }
+  .badge strong { color: var(--fg); font-weight: 600; margin-left: 4px; }
+
+  .cta {
+    display: flex; flex-wrap: wrap; gap: 10px;
+    margin: 0 0 28px;
+  }
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 9px 16px;
+    border-radius: var(--radius);
+    font-size: 14px; font-weight: 500;
+    text-decoration: none;
+    transition: background .12s ease, border-color .12s ease, color .12s ease;
+  }
+  .btn-primary {
+    background: var(--accent);
+    color: #fff !important;
+    border: 1px solid var(--accent);
+  }
+  .btn-primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+  .btn-secondary {
+    background: transparent;
+    color: var(--fg) !important;
+    border: 1px solid var(--line-strong);
+  }
+  .btn-secondary:hover { border-color: var(--fg); }
+
+  .callout {
+    background: var(--warn-bg);
+    border: 1px solid var(--warn-border);
+    color: var(--warn-fg);
+    padding: 12px 16px;
+    border-radius: var(--radius);
+    margin: 0 0 36px;
+    font-size: 13.5px;
+  }
+  .callout strong { font-weight: 700; }
+
+  h2 {
+    font-size: 22px; line-height: 1.3; margin: 56px 0 14px;
+    letter-spacing: -0.005em;
+    scroll-margin-top: 72px;
+  }
+  h3 {
+    font-size: 16px; margin: 28px 0 10px;
+  }
+  p { margin: 0 0 14px; }
+
+  pre {
+    background: var(--code-bg);
+    color: var(--code-fg);
+    padding: 14px 16px;
+    border-radius: var(--radius);
+    border: 1px solid var(--line);
+    overflow-x: auto;
+    margin: 0 0 16px;
+    font: 13px/1.55 ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  code {
+    font: 0.92em ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    background: var(--code-bg);
+    padding: 1px 5px;
+    border-radius: 4px;
+    border: 1px solid var(--line);
+  }
+  pre code { background: transparent; padding: 0; border: 0; }
+  .kw { color: #c026d3; } /* magenta */
+  .ty { color: #0891b2; } /* cyan */
+  .fn { color: #2563eb; } /* blue */
+  .at { color: #15803d; } /* green */
+  .st { color: #b45309; } /* amber */
+  .cm { color: #78716c; font-style: italic; }
+  @media (prefers-color-scheme: dark) {
+    .kw { color: #f0abfc; }
+    .ty { color: #67e8f9; }
+    .fn { color: #93c5fd; }
+    .at { color: #86efac; }
+    .st { color: #fcd34d; }
+    .cm { color: #a8a29e; }
+  }
+
+  .examples-grid {
+    list-style: none; padding: 0; margin: 0 0 8px;
+    display: grid; gap: 10px;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  }
+  .examples-grid li {
+    display: flex; flex-direction: column;
+    padding: 16px 18px;
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    transition: box-shadow .12s ease, border-color .12s ease, transform .12s ease;
+  }
+  .examples-grid li:hover {
+    box-shadow: var(--shadow-hover);
+    border-color: var(--line-strong);
+    transform: translateY(-1px);
+  }
+  .tile-main {
+    color: var(--fg); text-decoration: none;
+    flex: 1;
+  }
+  .name {
+    font-weight: 600; font-size: 15px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .arrow { color: var(--muted); transition: transform .12s ease, color .12s ease; }
+  .examples-grid li:hover .arrow { color: var(--accent); transform: translateX(2px); }
+  .desc { color: var(--muted); font-size: 13.5px; margin-top: 4px; line-height: 1.5; }
+  .tile-foot {
+    margin-top: 14px; padding-top: 12px;
+    border-top: 1px solid var(--line);
+    display: flex; gap: 14px;
+    font-size: 12px;
+  }
+  .tile-foot a {
+    color: var(--muted); text-decoration: none;
+  }
+  .tile-foot a:hover { color: var(--accent); }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 0 0 16px;
+    font-size: 14px;
+  }
+  th, td {
+    text-align: left;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--line);
+  }
+  th {
+    font-weight: 600;
+    color: var(--muted);
+    font-size: 11.5px;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+  }
+
+  ul.plain { margin: 0 0 14px; padding-left: 22px; }
+  ul.plain li { margin-bottom: 4px; }
+  .check::before { content: "✓ "; color: #15803d; font-weight: 700; }
+  .todo::before { content: "○ "; color: var(--muted); }
+  @media (prefers-color-scheme: dark) {
+    .check::before { color: #4ade80; }
+  }
+
+  footer {
+    margin-top: 72px; padding-top: 24px;
+    border-top: 1px solid var(--line);
+    color: var(--muted); font-size: 13px;
+    display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+  }
+  footer a { color: var(--muted); text-decoration: none; }
+  footer a:hover { color: var(--accent); }
+
+  @media (max-width: 520px) {
+    h1 { font-size: 30px; }
+    nav.top ul { gap: 12px; }
+    nav.top a.navlink:not(.gh-link) { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<nav class="top">
+  <div class="nav-inner">
+    <a class="logo" href="./"><span class="logo-mark"></span> jigs</a>
+    <ul>
+      <li><a class="navlink" href="#preview">Examples</a></li>
+      <li><a class="navlink" href="#install">Install</a></li>
+      <li><a class="navlink" href="#quickstart">Docs</a></li>
+      <li><a class="navlink gh-link" href="https://github.com/ValeriaVG/jigs" aria-label="GitHub">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
+        GitHub
+      </a></li>
+    </ul>
+  </div>
+</nav>
+
+<main>
+  <section class="hero">
+    <p class="eyebrow">A Rust framework</p>
+    <h1>Explicit pipelines, with interactive maps.</h1>
+    <p class="tagline">
+      <code>jigs</code> turns your request → response code into a graph the
+      compiler verifies and you can navigate. Every step is a typed, composable
+      jig — and every pipeline ships with a live, clickable map.
+    </p>
+
+    <div class="badges">
+      <a class="badge" href="https://crates.io/crates/jigs">crates.io <strong>v0.0.2</strong></a>
+      <a class="badge" href="https://docs.rs/jigs">docs.rs</a>
+      <span class="badge">MIT <strong>license</strong></span>
+      <span class="badge">Rust <strong>stable</strong></span>
+    </div>
+
+    <div class="cta">
+      <a class="btn btn-primary" href="#preview">See it in action →</a>
+      <a class="btn btn-secondary" href="https://github.com/ValeriaVG/jigs">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
+        Star on GitHub
+      </a>
+    </div>
+  </section>
+
+  <div class="callout">
+    <strong>Very early stage.</strong> Active, exploratory development — APIs will change, things will break, ideas may be thrown out. Star it, watch it, play with it — but don't ship it.
+  </div>
+
+  <p>A jig is a custom-made tool that controls the location or motion of other tools. HTTP handlers, RPC services, agentic workflows, data pipelines and event listeners all share one shape: something comes in and, after several steps, something comes out. The more steps there are, the harder it gets to debug, fix, and maintain.</p>
+
+  <p><code>jigs</code> lets you be explicit about your steps and write code like this:</p>
+
+<pre><code><span class="at">#[jig]</span>
+<span class="kw">fn</span> <span class="fn">handle</span>(request: <span class="ty">Request</span>) -&gt; <span class="ty">Response</span> {
+    request
+        .then(log_incoming)
+        .then(set_auth_state)
+        .then(route_to_feature)
+        .then(log_response)
+}</code></pre>
+
+  <p>Every step is a <code>jig</code> too, so pipelines compose to any size. <code>jigs</code> generates a graph of your codebase at compile time and lets you navigate it.</p>
+
+  <h2 id="preview">Live examples</h2>
+  <p>Each card below renders the actual interactive map generated from its example crate. Node sidebars link straight to the source on GitHub.</p>
+
+  <ul class="examples-grid">
+    <li>
+      <a class="tile-main" href="hello/">
+        <div class="name">hello <span class="arrow">→</span></div>
+        <div class="desc">Minimal pipeline: validate, greet, shout.</div>
+      </a>
+      <div class="tile-foot">
+        <a href="hello/">View map</a>
+        <a href="https://github.com/ValeriaVG/jigs/tree/main/examples/hello">Source</a>
+      </div>
+    </li>
+    <li>
+      <a class="tile-main" href="http/">
+        <div class="name">http <span class="arrow">→</span></div>
+        <div class="desc">A small HTTP server wired through jigs.</div>
+      </a>
+      <div class="tile-foot">
+        <a href="http/">View map</a>
+        <a href="https://github.com/ValeriaVG/jigs/tree/main/examples/http">Source</a>
+      </div>
+    </li>
+    <li>
+      <a class="tile-main" href="async/">
+        <div class="name">async <span class="arrow">→</span></div>
+        <div class="desc">Async pipeline running on tokio.</div>
+      </a>
+      <div class="tile-foot">
+        <a href="async/">View map</a>
+        <a href="https://github.com/ValeriaVG/jigs/tree/main/examples/async">Source</a>
+      </div>
+    </li>
+    <li>
+      <a class="tile-main" href="checkout/">
+        <div class="name">checkout <span class="arrow">→</span></div>
+        <div class="desc">Nested feature jigs in a checkout flow.</div>
+      </a>
+      <div class="tile-foot">
+        <a href="checkout/">View map</a>
+        <a href="https://github.com/ValeriaVG/jigs/tree/main/examples/checkout">Source</a>
+      </div>
+    </li>
+    <li>
+      <a class="tile-main" href="cf-rag/">
+        <div class="name">cf-rag <span class="arrow">→</span></div>
+        <div class="desc">Retrieval-augmented generation pipeline sketch.</div>
+      </a>
+      <div class="tile-foot">
+        <a href="cf-rag/">View map</a>
+        <a href="https://github.com/ValeriaVG/jigs/tree/main/examples/cf-rag">Source</a>
+      </div>
+    </li>
+  </ul>
+
+  <h2 id="install">Install</h2>
+<pre><code>cargo add jigs</code></pre>
+  <p>To enable per-step tracing, turn on the <code>trace</code> feature:</p>
+<pre><code>cargo add jigs --features trace</code></pre>
+
+  <h2 id="quickstart">Quickstart</h2>
+<pre><code><span class="kw">use</span> jigs::{jig, Request, Response};
+
+<span class="at">#[jig]</span>
+<span class="kw">fn</span> <span class="fn">validate</span>(r: <span class="ty">Request</span>&lt;<span class="ty">u32</span>&gt;) -&gt; <span class="ty">Request</span>&lt;<span class="ty">u32</span>&gt; { r }
+
+<span class="at">#[jig]</span>
+<span class="kw">fn</span> <span class="fn">handle</span>(r: <span class="ty">Request</span>&lt;<span class="ty">u32</span>&gt;) -&gt; <span class="ty">Response</span>&lt;<span class="ty">String</span>&gt; {
+    Response::ok(format!(<span class="st">"got {}"</span>, r.0))
+}
+
+<span class="kw">fn</span> <span class="fn">main</span>() {
+    <span class="kw">let</span> response = Request(42<span class="ty">u32</span>).then(validate).then(handle);
+    assert_eq!(response.inner.unwrap(), <span class="st">"got 42"</span>);
+}</code></pre>
+
+  <p>There are four kinds of jigs, distinguished by their input and output types:</p>
+
+  <table>
+    <thead>
+      <tr><th>Input</th><th>Output</th><th>Purpose</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>Request</code></td><td><code>Request</code></td><td>enrich, validate, transform</td></tr>
+      <tr><td><code>Request</code></td><td><code>Response</code></td><td>terminal handler</td></tr>
+      <tr><td><code>Response</code></td><td><code>Response</code></td><td>post-process the outgoing message</td></tr>
+      <tr><td><code>Request</code></td><td><code>Branch&lt;Req,Resp&gt;</code></td><td>guard that may short-circuit</td></tr>
+    </tbody>
+  </table>
+
+  <p>The type system enforces ordering: once you hold a <code>Response</code>, you cannot chain a jig that expects a <code>Request</code>. Errored responses and <code>Branch::Done</code> short-circuit the rest of the pipeline.</p>
+
+  <h2>Generate a map</h2>
+  <p>Every <code>#[jig]</code> registers itself in a global inventory at link time, so you can render an interactive HTML map and a Markdown/Mermaid version directly from your code — no scanning, no build script.</p>
+
+<pre><code><span class="kw">let</span> dir = env!(<span class="st">"CARGO_MANIFEST_DIR"</span>);
+std::fs::write(
+    format!(<span class="st">"{dir}/map.html"</span>),
+    jigs::map::to_html(<span class="ty">Some</span>(<span class="st">"handle"</span>), <span class="st">"my service"</span>, <span class="ty">None</span>),
+)?;
+std::fs::write(
+    format!(<span class="st">"{dir}/map.md"</span>),
+    jigs::map::to_markdown(<span class="ty">Some</span>(<span class="st">"handle"</span>), <span class="st">"my service"</span>),
+)?;</code></pre>
+
+  <p>The third argument to <code>to_html</code> is an optional editor URL template. Pass <code>Some("vscode://file/{path}:{line}")</code> for VS Code or Cursor, <code>idea://open?file={path}&amp;line={line}</code> for JetBrains IDEs, or a GitHub blob URL to publish maps that link back to your repo.</p>
+
+  <h2>Trace at runtime</h2>
+  <p>Things break, and the bigger the system, the harder it is to find where. <code>jigs</code> lets you pinpoint an error or a bottleneck:</p>
+
+<pre><code>log_incoming     ✓  0.1ms
+set_auth_state   ✓  2.3ms
+route_to_feature ✗  ERROR 500
+  └─ validate_route  ✓  0.4ms
+  └─ check_permissions ✗  ERROR: DB Timeout</code></pre>
+
+  <p>With the <code>trace</code> feature on, drain the per-thread buffer in either format:</p>
+
+<pre><code><span class="kw">let</span> entries = jigs::trace::take();
+print!(<span class="st">"{}"</span>, jigs::log::render_tree(&amp;entries));   <span class="cm">// human-readable</span>
+print!(<span class="st">"{}"</span>, jigs::log::render_ndjson(&amp;entries)); <span class="cm">// one JSON object per line</span></code></pre>
+
+  <p>The NDJSON form is meant for automated log ingestion; each line carries <code>name</code>, <code>depth</code>, <code>duration_ns</code>, <code>ok</code> and an optional <code>error</code> message.</p>
+
+  <h2>Roadmap</h2>
+  <ul class="plain">
+    <li class="check">Basic functionality</li>
+    <li class="check">Time tracing behind the <code>trace</code> feature</li>
+    <li class="check">Logging utils (tree + NDJSON)</li>
+    <li class="check">Interactive map generation</li>
+    <li class="todo">More complex examples</li>
+  </ul>
+  <h3>Maybe</h3>
+  <ul class="plain">
+    <li class="todo">Runtime tracing with interactive map</li>
+    <li class="todo">Trace and view remote jigs services as one system</li>
+  </ul>
+
+  <footer>
+    <span>MIT licensed · <a href="https://github.com/ValeriaVG/jigs/blob/main/LICENSE">LICENSE</a></span>
+    <span>
+      <a href="https://github.com/ValeriaVG/jigs">GitHub</a> ·
+      <a href="https://crates.io/crates/jigs">crates.io</a> ·
+      <a href="https://docs.rs/jigs">docs.rs</a>
+    </span>
+  </footer>
+  <p style="margin-top: 16px; font-size: 12px; color: var(--muted); text-align: center;">
+    This page was generated by AI from the project README and documentation.
+  </p>
+</main>
+</body>
+</html>

@@ -11,6 +11,7 @@ members = [
     "examples/http",
     "examples/async",
     "examples/checkout",
+    "examples/cf-rag",
 ]
 
 [workspace.package]

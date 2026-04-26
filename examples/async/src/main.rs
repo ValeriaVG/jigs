@@ -71,17 +71,23 @@ async fn handle(req: Request<Ctx>) -> Response<String> {
 async fn main() {
     if std::env::var("JIGS_MAP").is_ok() {
         let dir = env!("CARGO_MANIFEST_DIR");
+        let html_dir = format!("{dir}/../../docs/async");
+        std::fs::create_dir_all(&html_dir).expect("create docs/async");
         std::fs::write(
-            format!("{dir}/map.html"),
-            jigs::map::to_html(Some("handle"), "async example", None),
+            format!("{html_dir}/index.html"),
+            jigs::map::to_html(
+                Some("handle"),
+                "async example",
+                Some("https://github.com/ValeriaVG/jigs/blob/main/{path}#L{line}"),
+            ),
         )
-        .expect("write map.html");
+        .expect("write index.html");
         std::fs::write(
             format!("{dir}/map.md"),
             jigs::map::to_markdown(Some("handle"), "async example"),
         )
         .expect("write map.md");
-        eprintln!("wrote {dir}/map.html and map.md");
+        eprintln!("wrote {html_dir}/index.html and {dir}/map.md");
         return;
     }
     let req = Request(Ctx {

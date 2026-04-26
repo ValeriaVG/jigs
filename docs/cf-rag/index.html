@@ -1,0 +1,607 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>cf-rag example — jigs map</title>
+<style>
+  :root {
+    --bg: #fafaf9;
+    --canvas: #f5f5f4;
+    --fg: #1c1917;
+    --muted: #78716c;
+    --line: #e7e5e4;
+    --line-strong: #d6d3d1;
+    --card: #ffffff;
+    --accent: #4338ca;
+    --focus: #4338ca;
+    --shadow: 0 1px 2px rgba(28,25,23,.04), 0 1px 1px rgba(28,25,23,.03);
+    --shadow-hover: 0 2px 6px rgba(28,25,23,.06), 0 1px 2px rgba(28,25,23,.04);
+    --cat-request: #0284c7;
+    --cat-switch: #b45309;
+    --cat-response: #15803d;
+    --cat-other: #78716c;
+    --radius: 6px;
+    color-scheme: light;
+  }
+  [data-theme="dark"] {
+    --bg: #0c0a09;
+    --canvas: #1c1917;
+    --fg: #f5f5f4;
+    --muted: #a8a29e;
+    --line: #292524;
+    --line-strong: #44403c;
+    --card: #1c1917;
+    --accent: #a78bfa;
+    --focus: #c4b5fd;
+    --shadow: 0 1px 2px rgba(0,0,0,.5), 0 1px 1px rgba(0,0,0,.4);
+    --shadow-hover: 0 2px 8px rgba(0,0,0,.6), 0 1px 2px rgba(0,0,0,.5);
+    --cat-request: #38bdf8;
+    --cat-switch: #fbbf24;
+    --cat-response: #4ade80;
+    --cat-other: #a8a29e;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    font: 14px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    color: var(--fg);
+    background: var(--bg);
+    display: grid;
+    grid-template-rows: auto 1fr auto;
+  }
+
+  .skip {
+    position: absolute; left: -9999px; top: 0;
+    padding: 8px 12px; background: var(--accent); color: #fff;
+    z-index: 100; text-decoration: none; border-radius: 0 0 6px 0;
+  }
+  .skip:focus { left: 0; top: 0; }
+
+  header {
+    background: var(--card);
+    border-bottom: 1px solid var(--line);
+    padding: 12px 24px 14px;
+  }
+  .header-row {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 12px; margin-bottom: 6px;
+  }
+  .brand {
+    font-size: 10.5px; font-weight: 600; letter-spacing: .12em;
+    text-transform: uppercase; color: var(--muted);
+    margin: 0;
+  }
+  .theme-toggle {
+    font: inherit;
+    background: transparent;
+    border: 1px solid var(--line-strong);
+    border-radius: var(--radius);
+    color: var(--muted);
+    width: 30px; height: 30px;
+    cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center;
+    padding: 0;
+    transition: color .12s, border-color .12s, background .12s;
+  }
+  .theme-toggle:hover { color: var(--fg); border-color: var(--accent); }
+  .theme-toggle:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  .theme-toggle svg { width: 16px; height: 16px; display: block; }
+  .theme-toggle .icon-sun  { display: none; }
+  .theme-toggle .icon-moon { display: block; }
+  [data-theme="dark"] .theme-toggle .icon-sun  { display: block; }
+  [data-theme="dark"] .theme-toggle .icon-moon { display: none; }
+  nav.crumbs {
+    display: flex; flex-wrap: wrap; align-items: center;
+    gap: 2px;
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+    font-size: 15px;
+    line-height: 1.6;
+  }
+  nav.crumbs button {
+    font: inherit; color: var(--accent);
+    background: none; border: 0; padding: 2px 6px;
+    border-radius: 4px; cursor: pointer;
+  }
+  nav.crumbs button:hover { background: rgba(67,56,202,.08); }
+  nav.crumbs button:focus-visible {
+    outline: 2px solid var(--focus); outline-offset: 1px;
+  }
+  nav.crumbs .sep {
+    color: var(--line-strong); padding: 0 2px;
+    user-select: none;
+  }
+  nav.crumbs .here {
+    font-weight: 600; padding: 2px 6px; color: var(--fg);
+  }
+
+  main {
+    display: grid;
+    grid-template-columns: 1fr 320px;
+    min-height: 0;
+  }
+
+  #canvas {
+    overflow: auto;
+    padding: 40px 24px 48px;
+    background: var(--canvas);
+    position: relative;
+  }
+
+  ol.chain {
+    list-style: none;
+    margin: 0 auto;
+    padding: 0;
+    width: 100%;
+    max-width: 360px;
+    display: flex; flex-direction: column;
+    gap: 18px;
+    position: relative;
+  }
+  ol.chain::before {
+    content: '';
+    position: absolute;
+    left: 50%; top: 8px; bottom: 8px;
+    width: 2px;
+    background: var(--line-strong);
+    transform: translateX(-1px);
+    z-index: 0;
+    border-radius: 1px;
+  }
+  ol.chain li { position: relative; z-index: 1; display: block; }
+
+  button.node {
+    position: relative;
+    width: 100%;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+    background: var(--card);
+    border: 1px solid var(--line-strong);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    display: grid;
+    grid-template-columns: 4px 1fr auto;
+    align-items: stretch;
+    overflow: hidden;
+    padding: 0;
+    transition: border-color .12s, box-shadow .12s, transform .04s;
+  }
+  button.node:hover {
+    border-color: var(--line-strong);
+    box-shadow: var(--shadow-hover);
+  }
+  button.node:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+    border-color: var(--focus);
+  }
+  button.node:active { transform: translateY(0.5px); }
+
+  button.node .bar { background: var(--bar); }
+  button.node .body {
+    padding: 10px 14px;
+    display: flex; flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+  button.node .name {
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: -0.005em;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  button.node .kind {
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 0.01em;
+  }
+  button.node .arrow {
+    align-self: center;
+    color: var(--muted);
+    font-size: 14px;
+    padding: 0 12px;
+    line-height: 1;
+  }
+  button.node[data-composite="false"] .arrow { visibility: hidden; }
+  button.node[data-composite="true"]:hover .arrow,
+  button.node[data-composite="true"]:focus-visible .arrow { color: var(--accent); }
+  button.node[data-missing="true"] {
+    border-style: dashed;
+    background: var(--bg);
+  }
+  button.node[data-missing="true"] .kind::after { content: " · external"; }
+
+  .cat-request  { --bar: var(--cat-request); }
+  .cat-switch   { --bar: var(--cat-switch); }
+  .cat-response { --bar: var(--cat-response); }
+  .cat-other    { --bar: var(--cat-other); }
+
+  button.node .async {
+    position: absolute;
+    top: 6px;
+    right: 8px;
+    font-size: 9.5px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    color: var(--accent);
+    border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+    background: color-mix(in srgb, var(--accent) 6%, transparent);
+    border-radius: 3px;
+    padding: 1px 5px;
+    line-height: 1.4;
+    pointer-events: none;
+  }
+
+  .empty-card {
+    border: 1px dashed var(--line-strong);
+    border-radius: var(--radius);
+    padding: 28px;
+    text-align: center;
+    color: var(--muted);
+    background: var(--card);
+    font-size: 13px;
+  }
+
+  aside {
+    border-left: 1px solid var(--line);
+    background: var(--card);
+    padding: 24px 22px;
+    overflow: auto;
+    display: flex; flex-direction: column;
+    gap: 24px;
+  }
+  aside section { display: flex; flex-direction: column; gap: 10px; }
+  aside h2 {
+    margin: 0;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--muted);
+    letter-spacing: 0.01em;
+  }
+  aside .sel-name {
+    font-family: ui-monospace, monospace;
+    font-size: 16px;
+    font-weight: 600;
+  }
+  aside dl {
+    margin: 0;
+    display: grid;
+    grid-template-columns: 64px 1fr;
+    row-gap: 6px; column-gap: 14px;
+  }
+  aside dt { color: var(--muted); font-size: 12px; align-self: start; padding-top: 1px; }
+  aside dd {
+    margin: 0;
+    font-family: ui-monospace, monospace;
+    font-size: 12px;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+  }
+  aside .empty { color: var(--muted); font-style: italic; font-family: inherit; }
+  aside a {
+    color: var(--accent);
+    text-decoration: underline;
+    text-decoration-color: color-mix(in srgb, var(--accent) 35%, transparent);
+    text-underline-offset: 2px;
+    text-decoration-thickness: 1px;
+  }
+  aside a:hover { text-decoration-color: var(--accent); }
+  aside a:focus-visible {
+    outline: 2px solid var(--focus); outline-offset: 1px; border-radius: 2px;
+  }
+
+  footer.statusbar {
+    border-top: 1px solid var(--line);
+    background: var(--card);
+    padding: 8px 24px;
+    color: var(--muted);
+    font-size: 12px;
+    display: flex; flex-wrap: wrap; gap: 16px; align-items: center;
+  }
+  footer.statusbar kbd {
+    font: 11px ui-monospace, monospace;
+    background: var(--bg);
+    border: 1px solid var(--line-strong);
+    border-bottom-width: 1.5px;
+    border-radius: 3px;
+    padding: 1px 5px;
+    color: var(--fg);
+  }
+  footer.statusbar .group { display: inline-flex; align-items: center; gap: 4px; }
+</style>
+</head>
+<body>
+  <script>
+    (() => {
+      try {
+        const stored = localStorage.getItem('jigs-map-theme');
+        const dark = stored
+          ? stored === 'dark'
+          : matchMedia('(prefers-color-scheme: dark)').matches;
+        document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+      } catch (_) { /* private mode etc. */ }
+    })();
+  </script>
+  <a class="skip" href="#canvas">Skip to map</a>
+  <header>
+    <div class="header-row">
+      <p class="brand" id="title-slot">cf-rag example</p>
+      <button class="theme-toggle" id="theme-toggle" type="button"
+              aria-label="Toggle dark mode" title="Toggle theme">
+        <svg class="icon-moon" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" stroke-width="2" stroke-linecap="round"
+             stroke-linejoin="round" aria-hidden="true">
+          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+        </svg>
+        <svg class="icon-sun" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" stroke-width="2" stroke-linecap="round"
+             stroke-linejoin="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="4"/>
+          <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>
+        </svg>
+      </button>
+    </div>
+    <nav class="crumbs" id="crumbs" aria-label="Pipeline focus path"></nav>
+  </header>
+  <main>
+    <section id="canvas" tabindex="-1" aria-label="Pipeline map">
+      <ol class="chain" id="chain" aria-live="polite"></ol>
+    </section>
+    <aside aria-label="Details">
+      <section id="detail-region" aria-live="polite">
+        <h2>Selection</h2>
+        <div id="detail"></div>
+      </section>
+    </aside>
+  </main>
+  <footer class="statusbar" aria-label="Keyboard shortcuts">
+    <span class="group"><kbd>Tab</kbd> / <kbd>↑</kbd> <kbd>↓</kbd> move</span>
+    <span class="group"><kbd>Enter</kbd> focus into</span>
+    <span class="group"><kbd>Esc</kbd> back up</span>
+    <span class="group"><kbd>Alt</kbd>+<kbd>←</kbd> / <kbd>→</kbd> history</span>
+  </footer>
+  <script id="data" type="application/json">{"entry":"handle","title":"cf-rag example","editor":"https://github.com/ValeriaVG/jigs/blob/main/{path}#L{line}","nodes":{"admit":{"file":"examples/cf-rag/src/features/guard.rs","line":27,"kind":"Branch","input":"Request","async":false,"file_abs":"/Users/valeria/git/jigs/examples/cf-rag/src/features/guard.rs","basename":"guard.rs","children":["require_authenticated","input_filter"]},"authenticate":{"file":"examples/cf-rag/src/features/ingest.rs","line":5,"kind":"Request","input":"Request","async":true,"file_abs":"/Users/valeria/git/jigs/examples/cf-rag/src/features/ingest.rs","basename":"ingest.rs","children":[]},"embed_query":{"file":"examples/cf-rag/src/features/retrieve.rs","line":9,"kind":"Request","input":"Request","async":true,"file_abs":"/Users/valeria/git/jigs/examples/cf-rag/src/features/retrieve.rs","basename":"retrieve.rs","children":[]},"filter_and_rerank":{"file":"examples/cf-rag/src/features/retrieve.rs","line":26,"kind":"Request","input":"Request","async":false,"file_abs":"/Users/valeria/git/jigs/examples/cf-rag/src/features/retrieve.rs","basename":"retrieve.rs","children":[]},"finalize":{"file":"examples/cf-rag/src/features/output.rs","line":30,"kind":"Response","input":"Response","async":false,"file_abs":"/Users/valeria/git/jigs/examples/cf-rag/src/features/output.rs","basename":"output.rs","children":["pii_redact"]},"generate":{"file":"examples/cf-rag/src/features/agent.rs","line":21,"kind":"Response","input":"Request","async":true,"file_abs":"/Users/valeria/git/jigs/examples/cf-rag/src/features/agent.rs","basename":"agent.rs","children":[]},"handle":{"file":"examples/cf-rag/src/pipeline.rs","line":22,"kind":"Response","input":"Request","async":true,"file_abs":"/Users/valeria/git/jigs/examples/cf-rag/src/pipeline.rs","basename":"pipeline.rs","children":["prepare","admit","lookup_cache","retrieve","run","finalize","log_outbound"]},"input_filter":{"file":"examples/cf-rag/src/features/guard.rs","line":14,"kind":"Branch","input":"Request","async":false,"file_abs":"/Users/valeria/git/jigs/examples/cf-rag/src/features/guard.rs","basename":"guard.rs","children":[]},"log_incoming":{"file":"examples/cf-rag/src/pipeline.rs","line":5,"kind":"Request","input":"Request","async":false,"file_abs":"/Users/valeria/git/jigs/examples/cf-rag/src/pipeline.rs","basename":"pipeline.rs","children":[]},"log_outbound":{"file":"examples/cf-rag/src/pipeline.rs","line":11,"kind":"Response","input":"Response","async":false,"file_abs":"/Users/valeria/git/jigs/examples/cf-rag/src/pipeline.rs","basename":"pipeline.rs","children":[]},"lookup_cache":{"file":"examples/cf-rag/src/features/guard.rs","line":34,"kind":"Branch","input":"Request","async":true,"file_abs":"/Users/valeria/git/jigs/examples/cf-rag/src/features/guard.rs","basename":"guard.rs","children":[]},"maybe_call_tool":{"file":"examples/cf-rag/src/features/agent.rs","line":8,"kind":"Request","input":"Request","async":true,"file_abs":"/Users/valeria/git/jigs/examples/cf-rag/src/features/agent.rs","basename":"agent.rs","children":[]},"pii_redact":{"file":"examples/cf-rag/src/features/output.rs","line":5,"kind":"Response","input":"Response","async":false,"file_abs":"/Users/valeria/git/jigs/examples/cf-rag/src/features/output.rs","basename":"output.rs","children":[]},"prepare":{"file":"examples/cf-rag/src/pipeline.rs","line":17,"kind":"Request","input":"Request","async":true,"file_abs":"/Users/valeria/git/jigs/examples/cf-rag/src/pipeline.rs","basename":"pipeline.rs","children":["log_incoming","authenticate"]},"require_authenticated":{"file":"examples/cf-rag/src/features/guard.rs","line":5,"kind":"Branch","input":"Request","async":false,"file_abs":"/Users/valeria/git/jigs/examples/cf-rag/src/features/guard.rs","basename":"guard.rs","children":[]},"retrieve":{"file":"examples/cf-rag/src/features/retrieve.rs","line":44,"kind":"Request","input":"Request","async":true,"file_abs":"/Users/valeria/git/jigs/examples/cf-rag/src/features/retrieve.rs","basename":"retrieve.rs","children":["embed_query","vector_search","filter_and_rerank"]},"run":{"file":"examples/cf-rag/src/features/agent.rs","line":45,"kind":"Response","input":"Request","async":true,"file_abs":"/Users/valeria/git/jigs/examples/cf-rag/src/features/agent.rs","basename":"agent.rs","children":["maybe_call_tool","generate"]},"vector_search":{"file":"examples/cf-rag/src/features/retrieve.rs","line":15,"kind":"Request","input":"Request","async":true,"file_abs":"/Users/valeria/git/jigs/examples/cf-rag/src/features/retrieve.rs","basename":"retrieve.rs","children":[]}}}</script>
+  <script>
+  (() => {
+    const DATA = JSON.parse(document.getElementById('data').textContent);
+    const NODES = DATA.nodes;
+    const ENTRY = DATA.entry;
+    document.getElementById('title-slot').textContent = DATA.title || ENTRY;
+
+    const crumbs = document.getElementById('crumbs');
+    const chain = document.getElementById('chain');
+    const detail = document.getElementById('detail');
+    const canvas = document.getElementById('canvas');
+
+    let path = [ENTRY];
+    if (history.state && Array.isArray(history.state.path) && history.state.path.length) {
+      path = history.state.path;
+    } else {
+      history.replaceState({ path: path.slice() }, '');
+    }
+
+    function clear(node) { while (node.firstChild) node.removeChild(node.firstChild); }
+    function el(tag, attrs, text) {
+      const e = document.createElement(tag);
+      for (const [k, v] of Object.entries(attrs || {})) {
+        if (k.startsWith('on')) e.addEventListener(k.slice(2), v);
+        else if (v != null) e.setAttribute(k, v);
+      }
+      if (text != null) e.textContent = text;
+      return e;
+    }
+
+    function isComposite(name) {
+      const n = NODES[name];
+      return !!(n && n.children && n.children.length);
+    }
+
+    function navigateTo(newPath, replace) {
+      path = newPath.slice();
+      if (replace) history.replaceState({ path: path.slice() }, '');
+      else history.pushState({ path: path.slice() }, '');
+      render();
+    }
+
+    function focusInto(name) {
+      if (!isComposite(name)) return;
+      selected = null;
+      navigateTo([...path, name]);
+      canvas.focus();
+    }
+
+    function popTo(depth) {
+      if (depth >= path.length - 1) return;
+      selected = null;
+      navigateTo(path.slice(0, depth + 1));
+      canvas.focus();
+    }
+
+    function up() { if (path.length > 1) popTo(path.length - 2); }
+
+    function renderCrumbs() {
+      clear(crumbs);
+      path.forEach((name, i) => {
+        const last = i === path.length - 1;
+        if (i > 0) crumbs.appendChild(el('span', { class: 'sep', 'aria-hidden': 'true' }, '›'));
+        if (last) {
+          crumbs.appendChild(el('span', {
+            class: 'here', 'aria-current': 'page'
+          }, name));
+        } else {
+          crumbs.appendChild(el('button', {
+            type: 'button',
+            'aria-label': 'Focus up to ' + name,
+            onclick: () => popTo(i),
+          }, name));
+        }
+      });
+    }
+
+    function renderChain() {
+      clear(chain);
+      const here = path[path.length - 1];
+      const meta = NODES[here];
+      const kids = meta && meta.children ? meta.children : [];
+      if (!kids.length) {
+        const li = el('li');
+        li.appendChild(el('div', { class: 'empty-card' },
+          here + ' is a leaf jig.'));
+        chain.appendChild(li);
+        return;
+      }
+      kids.forEach((name) => {
+        const child = NODES[name];
+        const cat = category(child);
+        const composite = isComposite(name);
+        const missing = !child;
+        const sigLabel = child
+          ? (child.async ? 'async ' : '') + child.input + ' → ' + child.kind
+          : 'external';
+        const btn = el('button', {
+          type: 'button',
+          class: 'node cat-' + cat,
+          'data-name': name,
+          'data-composite': String(composite),
+          'data-missing': String(missing),
+          'aria-label': name + ', ' + sigLabel +
+            (composite ? ', sub-pipeline, press Enter to focus into' : ''),
+          onclick: (e) => { if (composite) { e.preventDefault(); focusInto(name); } },
+          onkeydown: (e) => onNodeKey(e, btn),
+          onfocus: () => { selected = name; showDetail(name); },
+          onmouseenter: () => showDetail(name),
+          onmouseleave: () => refreshDetail(),
+        });
+        btn.appendChild(el('span', { class: 'bar', 'aria-hidden': 'true' }));
+        const body = el('span', { class: 'body' });
+        body.appendChild(el('span', { class: 'name' }, name));
+        body.appendChild(el('span', { class: 'kind' },
+          sigLabel.replace(/^async /, '')));
+        btn.appendChild(body);
+        btn.appendChild(el('span', { class: 'arrow', 'aria-hidden': 'true' }, '↳'));
+        if (child && child.async) {
+          btn.appendChild(el('span', { class: 'async' }, 'async'));
+        }
+        const li = el('li');
+        li.appendChild(btn);
+        chain.appendChild(li);
+      });
+    }
+
+    function editorHref(n) {
+      const path = n.file_abs || n.file;
+      const tmpl = DATA.editor;
+      if (tmpl) {
+        return tmpl
+          .replace('{path}', encodeURI(path))
+          .replace('{line}', String(n.line));
+      }
+      const abs = path.startsWith('/') ? path : '/' + path;
+      return 'file://' + encodeURI(abs);
+    }
+    function category(meta) {
+      if (!meta) return 'other';
+      if (meta.input === 'Request' && meta.kind === 'Request') return 'request';
+      if (meta.input === 'Response' && meta.kind === 'Response') return 'response';
+      if (meta.input === 'Request' &&
+          (meta.kind === 'Response' || meta.kind === 'Branch' || meta.kind === 'Pending')) {
+        return 'switch';
+      }
+      return 'other';
+    }
+    let selected = null; // last node user picked (focus/click); resets on navigate
+
+    function currentDetailName() {
+      return selected || path[path.length - 1];
+    }
+    function refreshDetail() { showDetail(currentDetailName()); }
+    function showDetail(name) {
+      const n = NODES[name];
+      clear(detail);
+      detail.appendChild(el('div', { class: 'sel-name' }, name));
+      const dl = el('dl');
+      if (!n) {
+        dl.appendChild(el('dt', {}, 'status'));
+        dl.appendChild(el('dd', {}, 'not registered'));
+      } else {
+        dl.appendChild(el('dt', {}, 'signature'));
+        const sig = (n.async ? 'async ' : '') + n.input + ' → ' + n.kind;
+        dl.appendChild(el('dd', {}, sig));
+        dl.appendChild(el('dt', {}, 'file'));
+        const fileDd = el('dd');
+        fileDd.appendChild(el('a', {
+          href: editorHref(n),
+          title: n.file + ':' + n.line,
+        }, (n.basename || n.file) + ':' + n.line));
+        dl.appendChild(fileDd);
+        dl.appendChild(el('dt', {}, 'chains'));
+        const chainsDd = el('dd');
+        if (n.children && n.children.length) {
+          chainsDd.textContent = n.children.join(' → ');
+        } else {
+          chainsDd.appendChild(el('span', { class: 'empty' }, 'leaf'));
+        }
+        dl.appendChild(chainsDd);
+      }
+      detail.appendChild(dl);
+    }
+
+    function onNodeKey(e, btn) {
+      const buttons = Array.from(chain.querySelectorAll('button.node'));
+      const i = buttons.indexOf(btn);
+      switch (e.key) {
+        case 'ArrowDown':
+        case 'ArrowRight':
+          if (i < buttons.length - 1) { e.preventDefault(); buttons[i + 1].focus(); }
+          break;
+        case 'ArrowUp':
+        case 'ArrowLeft':
+          if (i > 0) { e.preventDefault(); buttons[i - 1].focus(); }
+          break;
+        case 'Home':
+          if (buttons[0]) { e.preventDefault(); buttons[0].focus(); }
+          break;
+        case 'End':
+          if (buttons.length) { e.preventDefault(); buttons[buttons.length - 1].focus(); }
+          break;
+        case 'Escape':
+          if (path.length > 1) { e.preventDefault(); up(); }
+          break;
+      }
+    }
+
+    function render() {
+      renderCrumbs();
+      renderChain();
+      refreshDetail();
+    }
+
+    window.addEventListener('popstate', (e) => {
+      if (e.state && Array.isArray(e.state.path)) {
+        path = e.state.path.slice();
+        selected = null;
+        render();
+      }
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && !chain.contains(document.activeElement)) {
+        if (path.length > 1) { e.preventDefault(); up(); }
+      }
+    });
+
+    document.getElementById('theme-toggle').addEventListener('click', () => {
+      const root = document.documentElement;
+      const next = root.dataset.theme === 'dark' ? 'light' : 'dark';
+      root.dataset.theme = next;
+      try { localStorage.setItem('jigs-map-theme', next); } catch (_) {}
+    });
+
+    render();
+  })();
+  </script>
+</body>
+</html>

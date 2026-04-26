@@ -126,6 +126,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "jigs-example-cf-rag"
+version = "0.0.0"
+dependencies = [
+ "futures",
+ "jigs",
+ "tokio",
+]
+
+[[package]]
 name = "jigs-example-checkout"
 version = "0.0.0"
 dependencies = [

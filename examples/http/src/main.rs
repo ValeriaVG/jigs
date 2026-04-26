@@ -70,15 +70,21 @@ fn handle(request: Request<HttpRequest>) -> Response<HttpResponse> {
 fn main() -> std::io::Result<()> {
     if std::env::var("JIGS_MAP").is_ok() {
         let dir = env!("CARGO_MANIFEST_DIR");
+        let html_dir = format!("{dir}/../../docs/http");
+        std::fs::create_dir_all(&html_dir)?;
         std::fs::write(
-            format!("{dir}/map.html"),
-            jigs::map::to_html(Some("handle"), "http example", None),
+            format!("{html_dir}/index.html"),
+            jigs::map::to_html(
+                Some("handle"),
+                "http example",
+                Some("https://github.com/ValeriaVG/jigs/blob/main/{path}#L{line}"),
+            ),
         )?;
         std::fs::write(
             format!("{dir}/map.md"),
             jigs::map::to_markdown(Some("handle"), "http example"),
         )?;
-        eprintln!("wrote {dir}/map.html and map.md");
+        eprintln!("wrote {html_dir}/index.html and {dir}/map.md");
         return Ok(());
     }
     let addr = std::env::args()
