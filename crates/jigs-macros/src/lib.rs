@@ -1,19 +1,41 @@
 //! Procedural macros for the `jigs` framework.
 //!
-//! `#[jig]` marks a function as a pipeline step. With the `trace` feature
-//! enabled, each invocation also records its name and wall-clock duration
-//! into the thread-local trace buffer in `jigs-trace`; without it, the
-//! attribute is a zero-cost marker that leaves the body untouched.
+//! `#[jig]` marks a function as a pipeline step. It always registers a
+//! `JigMeta` entry in the global inventory (name, source location, return
+//! kind, and the names of jigs called via `.then(...)` inside the body) so
+//! the map generator and other tools can introspect the pipeline at runtime
+//! without re-parsing source. With the `trace` feature it additionally wraps
+//! the body in a thread-local trace recorder.
 
 use proc_macro::TokenStream;
+use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
-use syn::{parse_macro_input, parse_quote, ItemFn, ReturnType};
+use syn::visit::Visit;
+use syn::{parse_macro_input, parse_quote, Expr, ExprMethodCall, ItemFn, ReturnType, Type};
 
 #[proc_macro_attribute]
 pub fn jig(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let input = parse_macro_input!(item as ItemFn);
     let vis = &input.vis;
     let block = &input.block;
+    let name_str = input.sig.ident.to_string();
+    let kind_str = return_kind(&input.sig.output);
+    let input_str = input_kind(&input.sig);
+    let is_async = input.sig.asyncness.is_some();
+    let chain = collect_chain(&input.block);
+    let meta = quote! {
+        ::jigs::inventory::submit! {
+            ::jigs::JigMeta {
+                name: #name_str,
+                file: file!(),
+                line: line!(),
+                kind: #kind_str,
+                input: #input_str,
+                is_async: #is_async,
+                chain: &[#(#chain),*],
+            }
+        }
+    };
 
     if input.sig.asyncness.is_some() {
         let mut sig = input.sig.clone();
@@ -26,46 +48,104 @@ pub fn jig(_attr: TokenStream, item: TokenStream) -> TokenStream {
             -> ::jigs::Pending<impl ::core::future::Future<Output = #ret_ty>>
         };
 
-        #[cfg(feature = "trace")]
-        let body = {
-            let name_str = input.sig.ident.to_string();
-            quote! {
-                ::jigs::Pending(async move {
-                    let __jig_idx = ::jigs::trace::enter(#name_str);
-                    let __jig_start = ::std::time::Instant::now();
-                    let __jig_result = (async move #block).await;
-                    let __jig_ok = ::jigs::Status::ok(&__jig_result);
-                    let __jig_err = ::jigs::Status::error(&__jig_result);
-                    ::jigs::trace::exit(__jig_idx, __jig_start.elapsed(), __jig_ok, __jig_err);
-                    __jig_result
-                })
-            }
-        };
-        #[cfg(not(feature = "trace"))]
-        let body = quote! {
-            ::jigs::Pending(async move #block)
-        };
-
-        return quote! { #vis #sig { #body } }.into();
+        let body = async_body(block, &name_str);
+        return quote! { #meta #vis #sig { #body } }.into();
     }
 
     let sig = &input.sig;
+    let body = sync_body(block, &name_str);
+    quote! { #meta #vis #sig { #body } }.into()
+}
 
-    #[cfg(feature = "trace")]
-    let body = {
-        let name_str = input.sig.ident.to_string();
-        quote! {
+#[cfg(feature = "trace")]
+fn sync_body(block: &syn::Block, name_str: &str) -> TokenStream2 {
+    quote! {
+        let __jig_idx = ::jigs::trace::enter(#name_str);
+        let __jig_start = ::std::time::Instant::now();
+        let __jig_result = (move || #block)();
+        let __jig_ok = ::jigs::Status::ok(&__jig_result);
+        let __jig_err = ::jigs::Status::error(&__jig_result);
+        ::jigs::trace::exit(__jig_idx, __jig_start.elapsed(), __jig_ok, __jig_err);
+        __jig_result
+    }
+}
+
+#[cfg(not(feature = "trace"))]
+fn sync_body(block: &syn::Block, _name_str: &str) -> TokenStream2 {
+    quote! { #block }
+}
+
+#[cfg(feature = "trace")]
+fn async_body(block: &syn::Block, name_str: &str) -> TokenStream2 {
+    quote! {
+        ::jigs::Pending(async move {
             let __jig_idx = ::jigs::trace::enter(#name_str);
             let __jig_start = ::std::time::Instant::now();
-            let __jig_result = (move || #block)();
+            let __jig_result = (async move #block).await;
             let __jig_ok = ::jigs::Status::ok(&__jig_result);
             let __jig_err = ::jigs::Status::error(&__jig_result);
             ::jigs::trace::exit(__jig_idx, __jig_start.elapsed(), __jig_ok, __jig_err);
             __jig_result
-        }
-    };
-    #[cfg(not(feature = "trace"))]
-    let body = quote! { #block };
+        })
+    }
+}
 
-    quote! { #vis #sig { #body } }.into()
+#[cfg(not(feature = "trace"))]
+fn async_body(block: &syn::Block, _name_str: &str) -> TokenStream2 {
+    quote! { ::jigs::Pending(async move #block) }
+}
+
+fn return_kind(ret: &ReturnType) -> &'static str {
+    let ty = match ret {
+        ReturnType::Default => return "Other",
+        ReturnType::Type(_, t) => t,
+    };
+    match last_type_ident(ty).as_deref() {
+        Some("Request") => "Request",
+        Some("Response") => "Response",
+        Some("Branch") => "Branch",
+        Some("Pending") => "Pending",
+        _ => "Other",
+    }
+}
+
+fn input_kind(sig: &syn::Signature) -> &'static str {
+    let ty = match sig.inputs.first() {
+        Some(syn::FnArg::Typed(pt)) => &*pt.ty,
+        _ => return "Other",
+    };
+    match last_type_ident(ty).as_deref() {
+        Some("Request") => "Request",
+        Some("Response") => "Response",
+        _ => "Other",
+    }
+}
+
+fn last_type_ident(ty: &Type) -> Option<String> {
+    if let Type::Path(p) = ty {
+        return Some(p.path.segments.last()?.ident.to_string());
+    }
+    None
+}
+
+fn collect_chain(block: &syn::Block) -> Vec<String> {
+    struct V(Vec<String>);
+    impl<'ast> Visit<'ast> for V {
+        fn visit_expr_method_call(&mut self, m: &'ast ExprMethodCall) {
+            syn::visit::visit_expr(self, &m.receiver);
+            if m.method == "then" {
+                if let Some(Expr::Path(p)) = m.args.first() {
+                    if let Some(id) = p.path.get_ident() {
+                        self.0.push(id.to_string());
+                    }
+                }
+            }
+            for a in &m.args {
+                syn::visit::visit_expr(self, a);
+            }
+        }
+    }
+    let mut v = V(Vec::new());
+    v.visit_block(block);
+    v.0
 }

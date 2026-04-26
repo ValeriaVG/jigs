@@ -68,6 +68,19 @@ fn handle(request: Request<HttpRequest>) -> Response<HttpResponse> {
 }
 
 fn main() -> std::io::Result<()> {
+    if std::env::var("JIGS_MAP").is_ok() {
+        let dir = env!("CARGO_MANIFEST_DIR");
+        std::fs::write(
+            format!("{dir}/map.html"),
+            jigs::map::to_html(Some("handle"), "http example", None),
+        )?;
+        std::fs::write(
+            format!("{dir}/map.md"),
+            jigs::map::to_markdown(Some("handle"), "http example"),
+        )?;
+        eprintln!("wrote {dir}/map.html and map.md");
+        return Ok(());
+    }
     let addr = std::env::args()
         .nth(1)
         .unwrap_or_else(|| "127.0.0.1:8080".into());

@@ -6,6 +6,7 @@ members = [
     "crates/jigs-macros",
     "crates/jigs-trace",
     "crates/jigs-log",
+    "crates/jigs-map",
     "examples/hello",
     "examples/http",
     "examples/async",
@@ -28,3 +29,5 @@ jigs-core = { version = "=0.0.1", path = "crates/jigs-core" }
 jigs-macros = { version = "=0.0.1", path = "crates/jigs-macros" }
 jigs-trace = { version = "=0.0.1", path = "crates/jigs-trace" }
 jigs-log = { version = "=0.0.1", path = "crates/jigs-log" }
+jigs-map = { version = "=0.0.1", path = "crates/jigs-map" }
+inventory = "0.3"

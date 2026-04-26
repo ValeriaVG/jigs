@@ -25,6 +25,8 @@ Every step is a `jig` too, so you can compose processing pipelines of virtually 
 
 The main advantage, though, is that `jigs` generates a graph of your codebase at compile time and lets you navigate it with ease.
 
+![Pipeline map](./map.png)
+
 ## Install
 
 ```sh
@@ -69,6 +71,39 @@ The type system enforces ordering: once you hold a `Response`, you cannot chain 
 
 See [`examples/`](./examples) for sync, async, and HTTP usage.
 
+## Generate a map
+
+Every `#[jig]` registers itself in a global inventory at link time, so you can render an interactive HTML map and a Markdown/Mermaid version straight from your code — no scanning, no build script.
+
+```rust
+use jigs::{jig, Request, Response};
+
+#[jig]
+fn validate(r: Request<u32>) -> Request<u32> { r }
+
+#[jig]
+fn handle(r: Request<u32>) -> Response<String> {
+    Response::ok(format!("got {}", r.0))
+}
+
+fn main() -> std::io::Result<()> {
+    let dir = env!("CARGO_MANIFEST_DIR");
+    std::fs::write(
+        format!("{dir}/map.html"),
+        jigs::map::to_html(Some("handle"), "my service", None),
+    )?;
+    std::fs::write(
+        format!("{dir}/map.md"),
+        jigs::map::to_markdown(Some("handle"), "my service"),
+    )?;
+    Ok(())
+}
+```
+
+The third argument to `to_html` is an optional editor URL template; pass e.g. `Some("vscodium://file/{path}:{line}")` for VSCodium, `vscode://file/{path}:{line}` for VS Code or Cursor, `idea://open?file={path}&line={line}` for JetBrains IDEs. With `None` the link falls back to `file://` and opens with your OS default.
+
+The Markdown form embeds a Mermaid flowchart that renders inline on GitHub — see [`examples/http/map.md`](./examples/http/map.md).
+
 ## Trace the exact steps in runtime
 
 Things break, and the bigger the system, the harder it is to figure out where exactly things went wrong. `jigs` lets you pinpoint an error or a bottleneck with ease:
@@ -100,11 +135,12 @@ The NDJSON form is meant for automated log ingestion; each line carries
 - [x] Basic functionality
 - [x] Time tracing (behind the `trace` feature)
 - [x] Logging utils (tree + NDJSON via `jigs-log`)
-- [ ] Generation of interactive map at compile time
+- [x] Generation of interactive map at compile time ([see above](#generate-a-map))
+- [ ] Add more complex examples
 
 ## Maybe Roadmap
+- Runtime tracing with interactive map
 - Ability to trace and view remote jigs services as one system
-- Self hosting and cloud options
 
 
 ## License

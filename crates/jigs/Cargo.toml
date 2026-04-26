@@ -22,6 +22,7 @@ jigs-core.workspace = true
 jigs-macros.workspace = true
 jigs-trace = { workspace = true, optional = true }
 jigs-log = { workspace = true, optional = true }
+jigs-map = { workspace = true }
 
 [package.metadata.docs.rs]
 all-features = true

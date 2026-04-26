@@ -1,6 +1,6 @@
 [package]
-name = "jigs-macros"
-description = "Procedural macros for the jigs framework"
+name = "jigs-map"
+description = "HTML map generator for jigs pipelines"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -11,16 +11,7 @@ rust-version.workspace = true
 readme.workspace = true
 keywords.workspace = true
 categories.workspace = true
-documentation = "https://docs.rs/jigs-macros"
-
-[lib]
-proc-macro = true
-
-[features]
-default = []
-trace = []
+documentation = "https://docs.rs/jigs-map"
 
 [dependencies]
-proc-macro2 = "1"
-quote = "1"
-syn = { version = "2", features = ["full", "visit"] }
+jigs-core = { workspace = true }

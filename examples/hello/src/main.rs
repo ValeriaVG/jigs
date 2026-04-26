@@ -41,6 +41,21 @@ fn handle(request: Request<String>) -> Response<String> {
 }
 
 fn main() {
+    if std::env::var("JIGS_MAP").is_ok() {
+        let dir = env!("CARGO_MANIFEST_DIR");
+        std::fs::write(
+            format!("{dir}/map.html"),
+            jigs::map::to_html(Some("handle"), "hello example", None),
+        )
+        .expect("write map.html");
+        std::fs::write(
+            format!("{dir}/map.md"),
+            jigs::map::to_markdown(Some("handle"), "hello example"),
+        )
+        .expect("write map.md");
+        eprintln!("wrote {dir}/map.html and map.md");
+        return;
+    }
     let name = std::env::args()
         .nth(1)
         .map(|s| s.trim().to_string())

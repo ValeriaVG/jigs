@@ -12,6 +12,12 @@
 //! expects a `Request`. A `Response` carrying an error short-circuits the
 //! remainder of the pipeline; so does a `Branch::Done`.
 
+pub mod meta;
+pub use meta::{all as all_jigs, find as find_jig, JigMeta};
+
+#[doc(hidden)]
+pub use inventory;
+
 /// Inbound message flowing through a pipeline.
 pub struct Request<T>(pub T);
 

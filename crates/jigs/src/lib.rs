@@ -41,3 +41,5 @@ pub use jigs_trace as trace;
 
 #[cfg(feature = "trace")]
 pub use jigs_log as log;
+
+pub use jigs_map as map;
