@@ -1,0 +1,20 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/jigs",
+    "crates/jigs-core",
+    "crates/jigs-macros",
+    "examples/hello",
+]
+
+[workspace.package]
+version = "0.0.1"
+edition = "2021"
+license = "MIT"
+repository = "https://github.com/ValeriaVG/jigs"
+authors = ["ValeriaVG"]
+rust-version = "1.75"
+
+[workspace.dependencies]
+jigs-core = { version = "=0.0.1", path = "crates/jigs-core" }
+jigs-macros = { version = "=0.0.1", path = "crates/jigs-macros" }

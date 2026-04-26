@@ -1,0 +1,14 @@
+[package]
+name = "jigs"
+description = "A small Rust framework for explicit, composable, traceable processing pipelines"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+readme = "../../README.md"
+
+[dependencies]
+jigs-core.workspace = true
+jigs-macros.workspace = true

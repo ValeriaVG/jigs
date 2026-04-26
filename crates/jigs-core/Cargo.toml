@@ -1,0 +1,9 @@
+[package]
+name = "jigs-core"
+description = "Core traits and runtime for the jigs framework"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+rust-version.workspace = true

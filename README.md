@@ -12,11 +12,13 @@ So `jigs` is a small Rust framework that lets you be explicit about your process
 
 ```rust
 #[jig]
-let pipeline = request
-    .then(log_incoming)
-    .then(set_auth_state)
-    .then(route_to_feature)
-    .then(log_response);
+fn handle(request: Request) -> Response {
+    request
+        .then(log_incoming)
+        .then(set_auth_state)
+        .then(route_to_feature)
+        .then(log_response)
+}
 ```
 
 Every step is a `jig` too, so you can compose processing pipelines of virtually any size.
