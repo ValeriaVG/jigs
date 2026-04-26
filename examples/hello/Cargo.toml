@@ -5,4 +5,4 @@ edition.workspace = true
 publish = false
 
 [dependencies]
-jigs = { path = "../../crates/jigs" }
+jigs = { path = "../../crates/jigs", features = ["trace"] }

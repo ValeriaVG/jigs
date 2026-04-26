@@ -9,6 +9,11 @@ authors.workspace = true
 rust-version.workspace = true
 readme = "../../README.md"
 
+[features]
+default = []
+trace = ["dep:jigs-trace", "jigs-macros/trace"]
+
 [dependencies]
 jigs-core.workspace = true
 jigs-macros.workspace = true
+jigs-trace = { workspace = true, optional = true }

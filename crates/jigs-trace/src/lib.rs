@@ -1,5 +1,14 @@
+//! Per-jig execution tracing.
+//!
+//! Wires into `#[jig]` when the `trace` feature is enabled on the `jigs`
+//! umbrella crate (or on `jigs-macros` directly). Each instrumented jig
+//! records its name, depth, wall-clock duration and outcome into a
+//! thread-local buffer that callers can drain with [`take`].
+
 use std::cell::{Cell, RefCell};
 use std::time::Duration;
+
+pub use jigs_core::Status;
 
 pub struct Entry {
     pub name: &'static str,

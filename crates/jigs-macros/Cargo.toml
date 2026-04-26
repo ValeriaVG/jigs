@@ -11,6 +11,10 @@ rust-version.workspace = true
 [lib]
 proc-macro = true
 
+[features]
+default = []
+trace = []
+
 [dependencies]
 proc-macro2 = "1"
 quote = "1"

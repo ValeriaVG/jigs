@@ -11,8 +11,6 @@
 //! expects a `Request`. A `Response` carrying an error short-circuits the
 //! remainder of the pipeline; so does a `Branch::Done`.
 
-pub mod trace;
-
 pub struct Request<T>(pub T);
 
 pub struct Response<T> {
