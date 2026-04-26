@@ -5,9 +5,13 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
+homepage.workspace = true
 authors.workspace = true
 rust-version.workspace = true
-readme = "../../README.md"
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+documentation = "https://docs.rs/jigs"
 
 [features]
 default = []
@@ -17,3 +21,7 @@ trace = ["dep:jigs-trace", "jigs-macros/trace"]
 jigs-core.workspace = true
 jigs-macros.workspace = true
 jigs-trace = { workspace = true, optional = true }
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]

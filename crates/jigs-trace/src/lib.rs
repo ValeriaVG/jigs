@@ -1,3 +1,4 @@
+#![warn(missing_docs)]
 //! Per-jig execution tracing.
 //!
 //! Wires into `#[jig]` when the `trace` feature is enabled on the `jigs`
@@ -10,11 +11,17 @@ use std::time::Duration;
 
 pub use jigs_core::Status;
 
+/// One recorded jig invocation.
 pub struct Entry {
+    /// Function name of the jig.
     pub name: &'static str,
+    /// Nesting depth at the time of entry (top-level jigs are depth 0).
     pub depth: usize,
+    /// Wall-clock time spent inside the jig.
     pub duration: Duration,
+    /// `true` if the jig produced a successful outcome.
     pub ok: bool,
+    /// Error message captured from the jig's output, if any.
     pub error: Option<String>,
 }
 
@@ -23,6 +30,8 @@ thread_local! {
     static BUFFER: RefCell<Vec<Entry>> = const { RefCell::new(Vec::new()) };
 }
 
+/// Record the start of a jig invocation. Returns an index used by [`exit`]
+/// to close the same entry. Called by code generated from `#[jig]`.
 pub fn enter(name: &'static str) -> usize {
     let depth = DEPTH.with(|d| {
         let v = d.get();
@@ -43,6 +52,8 @@ pub fn enter(name: &'static str) -> usize {
     })
 }
 
+/// Close the entry at `idx` with its measured duration and outcome.
+/// Called by code generated from `#[jig]`.
 pub fn exit(idx: usize, duration: Duration, ok: bool, error: Option<String>) {
     DEPTH.with(|d| d.set(d.get().saturating_sub(1)));
     BUFFER.with(|b| {
@@ -53,6 +64,8 @@ pub fn exit(idx: usize, duration: Duration, ok: bool, error: Option<String>) {
     });
 }
 
+/// Drain the current thread's trace buffer and reset depth tracking.
+/// Call once per request after the pipeline finishes.
 pub fn take() -> Vec<Entry> {
     DEPTH.with(|d| d.set(0));
     BUFFER.with(|b| std::mem::take(&mut *b.borrow_mut()))

@@ -45,7 +45,7 @@ fn main() {
         .nth(1)
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty())
-        .unwrap_or_else(|| "".to_string());
+        .unwrap_or_default();
     let response = handle(Request(name));
     match response.inner {
         Ok(v) => println!("{v}"),

@@ -64,9 +64,7 @@ async fn handle(req: Request<Ctx>) -> Response<String> {
     // Async section: await collapses Pending back to a Request.
     let req = req.then(log_incoming).then(enrich).await;
     // Sync section: Branch + sync handlers chain normally on top.
-    req.then(require_account)
-        .then(render)
-        .then(log_outbound)
+    req.then(require_account).then(render).then(log_outbound)
 }
 
 #[tokio::main(flavor = "current_thread")]
@@ -101,7 +99,13 @@ fn render_trace(entries: &[Entry]) -> String {
             Some(msg) => format!("ERROR: {msg}"),
             None => format!("{:?}", e.duration),
         };
-        out.push_str(&format!("{}{}  {}  {}\n", label, " ".repeat(pad), mark, detail));
+        out.push_str(&format!(
+            "{}{}  {}  {}\n",
+            label,
+            " ".repeat(pad),
+            mark,
+            detail
+        ));
     }
     out
 }

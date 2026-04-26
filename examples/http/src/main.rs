@@ -68,7 +68,9 @@ fn handle(request: Request<HttpRequest>) -> Response<HttpResponse> {
 }
 
 fn main() -> std::io::Result<()> {
-    let addr = std::env::args().nth(1).unwrap_or_else(|| "127.0.0.1:8080".into());
+    let addr = std::env::args()
+        .nth(1)
+        .unwrap_or_else(|| "127.0.0.1:8080".into());
     let listener = TcpListener::bind(&addr)?;
     println!("listening on http://{addr}");
     println!("try: curl http://{addr}/hello/jigs");
@@ -129,7 +131,13 @@ fn render(entries: &[Entry]) -> String {
             Some(msg) => format!("ERROR: {msg}"),
             None => format!("{:?}", e.duration),
         };
-        out.push_str(&format!("{}{}  {}  {}\n", label, " ".repeat(pad), mark, detail));
+        out.push_str(&format!(
+            "{}{}  {}  {}\n",
+            label,
+            " ".repeat(pad),
+            mark,
+            detail
+        ));
     }
     out
 }

@@ -47,7 +47,7 @@ pub fn read_request(stream: &mut TcpStream) -> std::io::Result<HttpRequest> {
     let mut reader = BufReader::new(stream);
     let mut line = String::new();
     reader.read_line(&mut line)?;
-    let mut parts = line.trim_end().split_whitespace();
+    let mut parts = line.split_whitespace();
     let method = parts.next().unwrap_or("").to_string();
     let path = parts.next().unwrap_or("").to_string();
 

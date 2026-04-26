@@ -25,6 +25,50 @@ Every step is a `jig` too, so you can compose processing pipelines of virtually 
 
 The main advantage, though, is that `jigs` generates a graph of your codebase at compile time and lets you navigate it with ease.
 
+## Install
+
+```sh
+cargo add jigs
+```
+
+To enable per-step tracing, turn on the `trace` feature:
+
+```sh
+cargo add jigs --features trace
+```
+
+## Quickstart
+
+```rust
+use jigs::{jig, Request, Response};
+
+#[jig]
+fn validate(r: Request<u32>) -> Request<u32> { r }
+
+#[jig]
+fn handle(r: Request<u32>) -> Response<String> {
+    Response::ok(format!("got {}", r.0))
+}
+
+fn main() {
+    let response = Request(42u32).then(validate).then(handle);
+    assert_eq!(response.inner.unwrap(), "got 42");
+}
+```
+
+There are four kinds of jigs, distinguished by their input and output types:
+
+| Input      | Output            | Purpose                          |
+| ---------- | ----------------- | -------------------------------- |
+| `Request`  | `Request`         | enrich, validate, transform      |
+| `Request`  | `Response`        | terminal handler                 |
+| `Response` | `Response`        | post-process the outgoing message|
+| `Request`  | `Branch<Req,Resp>`| guard that may short-circuit     |
+
+The type system enforces ordering: once you hold a `Response`, you cannot chain a jig that expects a `Request`. Errored responses and `Branch::Done` short-circuit the rest of the pipeline.
+
+See [`examples/`](./examples) for sync, async, and HTTP usage.
+
 ## Trace the exact steps in runtime
 
 Things break, and the bigger the system, the harder it is to figure out where exactly things went wrong. `jigs` lets you pinpoint an error or a bottleneck with ease:
@@ -41,8 +85,9 @@ route_to_feature ✗  ERROR 500
 `jigs` works with any existing or future framework that has two distinct types for incoming and outbound messages. Check the [examples](./examples) to see it in action.
 
 ## Roadmap
-- [ ] Basic functionality
-- [ ] Time tracing and logging utils
+- [x] Basic functionality
+- [x] Time tracing (behind the `trace` feature)
+- [ ] Logging utils
 - [ ] Generation of interactive map at compile time
 
 ## Maybe Roadmap
