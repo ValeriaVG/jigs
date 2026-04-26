@@ -56,6 +56,84 @@ where
     }
 }
 
+/// Wraps a future returned by an async jig so the chain remains spelled with `.then`.
+///
+/// The `#[jig]` macro converts `async fn` jigs into ordinary functions returning
+/// `Pending<impl Future<Output = T>>`. `Pending` itself impls `IntoFuture`, so the
+/// final `.await` resolves the whole chain.
+pub struct Pending<F>(pub F);
+
+/// Lifts the output of a jig into a future, so async and sync jigs can be chained
+/// uniformly inside a `Pending` chain. Sync values become a `Ready` future, a
+/// nested `Pending` is unwrapped to its inner future.
+pub trait Step {
+    type Out;
+    type Fut: core::future::Future<Output = Self::Out>;
+    fn into_step(self) -> Self::Fut;
+}
+
+impl<T> Step for Request<T> {
+    type Out = Request<T>;
+    type Fut = core::future::Ready<Request<T>>;
+    fn into_step(self) -> Self::Fut {
+        core::future::ready(self)
+    }
+}
+
+impl<T> Step for Response<T> {
+    type Out = Response<T>;
+    type Fut = core::future::Ready<Response<T>>;
+    fn into_step(self) -> Self::Fut {
+        core::future::ready(self)
+    }
+}
+
+impl<R, P> Step for Branch<R, P> {
+    type Out = Branch<R, P>;
+    type Fut = core::future::Ready<Branch<R, P>>;
+    fn into_step(self) -> Self::Fut {
+        core::future::ready(self)
+    }
+}
+
+impl<F> Step for Pending<F>
+where
+    F: core::future::Future,
+{
+    type Out = F::Output;
+    type Fut = F;
+    fn into_step(self) -> Self::Fut {
+        self.0
+    }
+}
+
+impl<F> core::future::IntoFuture for Pending<F>
+where
+    F: core::future::Future,
+{
+    type Output = F::Output;
+    type IntoFuture = F;
+    fn into_future(self) -> F {
+        self.0
+    }
+}
+
+impl<F> Pending<F>
+where
+    F: core::future::Future + 'static,
+{
+    pub fn then<J, R>(self, jig: J) -> Pending<impl core::future::Future<Output = R::Out>>
+    where
+        J: Jig<F::Output, Out = R> + 'static,
+        R: Step + 'static,
+    {
+        Pending(async move {
+            let val = self.0.await;
+            jig.run(val).into_step().await
+        })
+    }
+}
+
 pub trait Status {
     fn ok(&self) -> bool;
     fn error(&self) -> Option<String> {

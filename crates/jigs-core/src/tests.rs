@@ -60,6 +60,56 @@ fn branch_done_short_circuits_to_response() {
     assert_eq!(out.inner.unwrap_err(), "rejected");
 }
 
+fn block_on<F: std::future::Future>(mut fut: F) -> F::Output {
+    use std::pin::Pin;
+    use std::task::{Context, Poll, RawWaker, RawWakerVTable, Waker};
+    static VTABLE: RawWakerVTable = RawWakerVTable::new(
+        |_| RawWaker::new(std::ptr::null(), &VTABLE),
+        |_| {},
+        |_| {},
+        |_| {},
+    );
+    let raw = RawWaker::new(std::ptr::null(), &VTABLE);
+    let waker = unsafe { Waker::from_raw(raw) };
+    let mut cx = Context::from_waker(&waker);
+    let mut fut = unsafe { Pin::new_unchecked(&mut fut) };
+    loop {
+        if let Poll::Ready(v) = fut.as_mut().poll(&mut cx) {
+            return v;
+        }
+    }
+}
+
+// Mirror the macro's async expansion by hand to keep tests dep-free.
+fn enrich(r: Request<i32>) -> Pending<impl std::future::Future<Output = Request<i32>>> {
+    Pending(async move { Request(r.0 + 1) })
+}
+
+fn handle(r: Request<i32>) -> Pending<impl std::future::Future<Output = Response<String>>> {
+    Pending(async move { Response::ok(format!("got {}", r.0)) })
+}
+
+#[test]
+fn async_then_chains_with_sync_then() {
+    let out = block_on(async {
+        Request(1)
+            .then(enrich)
+            .then(|r: Request<i32>| Request(r.0 + 10))
+            .then(handle)
+            .await
+    });
+    assert_eq!(out.inner.unwrap(), "got 12");
+}
+
+#[test]
+fn pending_threads_value_through_sync_jig() {
+    fn shout(r: Response<String>) -> Response<String> {
+        Response::ok(r.inner.unwrap().to_uppercase())
+    }
+    let out = block_on(async { Request(7).then(handle).then(shout).await });
+    assert_eq!(out.inner.unwrap(), "GOT 7");
+}
+
 #[test]
 fn branch_then_req_to_req_stays_in_branch() {
     fn guard(r: Request<i32>) -> Branch<i32, String> {

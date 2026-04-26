@@ -6,6 +6,7 @@ members = [
     "crates/jigs-macros",
     "examples/hello",
     "examples/http",
+    "examples/async",
 ]
 
 [workspace.package]
