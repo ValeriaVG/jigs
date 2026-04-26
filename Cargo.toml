@@ -10,6 +10,7 @@ members = [
     "examples/hello",
     "examples/http",
     "examples/async",
+    "examples/checkout",
 ]
 
 [workspace.package]
