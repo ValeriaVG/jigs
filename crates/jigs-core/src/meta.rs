@@ -17,7 +17,7 @@ pub struct JigMeta {
     /// `"Pending"`, or `"Other"`.
     pub kind: &'static str,
     /// Outer first-argument type identifier: `"Request"`, `"Response"`, or
-    /// `"Other"`. Combined with [`kind`] this places a jig in one of three
+    /// `"Other"`. Combined with [`Self::kind`] this places a jig in one of three
     /// semantic buckets: request-side (Request → Request), switching
     /// (Request → Response/Branch) or response-side (Response → Response).
     pub input: &'static str,
