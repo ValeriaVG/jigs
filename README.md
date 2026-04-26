@@ -71,7 +71,20 @@ There are four kinds of jigs, distinguished by their input and output types:
 
 The type system enforces ordering: once you hold a `Response`, you cannot chain a jig that expects a `Request`. Errored responses and `Branch::Done` short-circuit the rest of the pipeline.
 
-See [`examples/`](./examples) for sync, async, and HTTP usage.
+See [`examples/`](./examples) for sync, async, HTTP, and a multithreaded [todo API](./examples/todo-api) that demonstrates fork-based routing at multiple nesting depths.
+
+For multi-arm dispatch use `fork!`. First matching predicate wins, `_` is the default:
+
+```rust
+#[jig]
+fn route(req: Request<HttpRequest>) -> Response<String> {
+    fork!(req,
+        |r: &HttpRequest| r.path == "/"                  => root,
+        |r: &HttpRequest| r.path.starts_with("/hello/")  => hello,
+        _ => not_found,
+    )
+}
+```
 
 ## Generate a map
 
@@ -138,7 +151,7 @@ The NDJSON form is meant for automated log ingestion; each line carries
 - [x] Time tracing (behind the `trace` feature)
 - [x] Logging utils (tree + NDJSON via `jigs-log`)
 - [x] Generation of interactive map at compile time ([see above](#generate-a-map))
-- [ ] Add more complex examples
+- [x] Add more complex examples (see [`examples/todo-api`](./examples/todo-api))
 
 ## Maybe Roadmap
 - IDE extension to view jigs in the editor
