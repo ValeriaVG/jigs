@@ -26,3 +26,4 @@ There are 4 types of jigs:
 - Keep files under 200 LOC and functions under 50
 - Use comments only when the purpose of code can't be derived from naming
 - Ditch emojis, emdashes and other annoying LLM telltales
+- In `fork!`, keep each arm's predicate and handler together: inline the predicate as a closure, or put a small named predicate fn immediately above its handler. Don't separate predicates from handlers and don't extract shared multi-route predicate helpers.
