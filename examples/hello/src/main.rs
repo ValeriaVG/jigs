@@ -21,12 +21,18 @@ fn greet(req: Request<String>) -> Response<String> {
 
 #[jig]
 fn shout(resp: Response<String>) -> Response<String> {
-    Response::ok(resp.inner.unwrap().to_uppercase())
+    match resp.inner {
+        Ok(v) => Response::ok(v.to_uppercase()),
+        Err(_) => resp,
+    }
 }
 
 #[jig]
 fn log_outbound(res: Response<String>) -> Response<String> {
-    println!("result: {}", res.inner.as_ref().unwrap());
+    match res.inner.as_ref() {
+        Ok(v) => println!("result: {v}"),
+        Err(e) => println!("error: {e}"),
+    }
     res
 }
 

@@ -28,12 +28,26 @@ fn response_to_response_jig_keeps_response_type() {
 }
 
 #[test]
-fn errored_response_short_circuits_downstream_jigs() {
-    fn never_called(_: Response<String>) -> Response<String> {
-        panic!("should not run");
+fn errored_response_still_runs_downstream_jigs() {
+    fn observe(r: Response<String>) -> Response<String> {
+        assert!(r.is_err());
+        r
     }
-    let out = Response::<String>::err("boom").then(never_called);
+    let out = Response::<String>::err("boom").then(observe);
     assert_eq!(out.inner.unwrap_err(), "boom");
+}
+
+#[test]
+fn response_jig_can_recover_from_error() {
+    fn recover(r: Response<String>) -> Response<String> {
+        if r.is_err() {
+            Response::ok("fallback".to_string())
+        } else {
+            r
+        }
+    }
+    let out = Response::<String>::err("boom").then(recover);
+    assert_eq!(out.inner.unwrap(), "fallback");
 }
 
 #[test]

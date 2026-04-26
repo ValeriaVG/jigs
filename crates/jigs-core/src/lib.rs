@@ -9,8 +9,12 @@
 //!
 //! Pipelines are built by chaining jigs with `.then(...)`. The type system
 //! enforces ordering: once you hold a `Response`, you cannot chain a jig that
-//! expects a `Request`. A `Response` carrying an error short-circuits the
-//! remainder of the pipeline; so does a `Branch::Done`.
+//! expects a `Request`. `Branch::Done` and errored request-handling jigs
+//! short-circuit the request side of the pipeline, but once a `Response`
+//! exists every `Response -> Response` jig runs — including on errored
+//! responses — so finalizers (logging, headers, error envelopes) always
+//! see the outcome. Jigs that should only act on success must check
+//! `Response::is_ok` themselves.
 
 pub mod meta;
 pub use meta::{all as all_jigs, find as find_jig, JigMeta};
@@ -255,15 +259,14 @@ impl<T> Request<T> {
 }
 
 impl<T> Response<T> {
-    /// Append a `Response -> Response` jig. Errored responses skip the jig.
+    /// Append a `Response -> Response` jig. The jig always runs, including
+    /// on errored responses, so finalizers see every outcome. Jigs that
+    /// should only transform successful responses must check `is_ok` first.
     pub fn then<J, U>(self, jig: J) -> Response<U>
     where
         J: Jig<Response<T>, Out = Response<U>>,
     {
-        match self.inner {
-            Ok(_) => jig.run(self),
-            Err(e) => Response { inner: Err(e) },
-        }
+        jig.run(self)
     }
 }
 

@@ -37,6 +37,12 @@ pub fn jig(_attr: TokenStream, item: TokenStream) -> TokenStream {
         }
     };
 
+    let response_input_ident = if input_str == "Response" {
+        first_arg_ident(&input.sig)
+    } else {
+        None
+    };
+
     if input.sig.asyncness.is_some() {
         let mut sig = input.sig.clone();
         sig.asyncness = None;
@@ -48,42 +54,81 @@ pub fn jig(_attr: TokenStream, item: TokenStream) -> TokenStream {
             -> ::jigs::Pending<impl ::core::future::Future<Output = #ret_ty>>
         };
 
-        let body = async_body(block, &name_str);
+        let body = async_body(block, &name_str, response_input_ident.as_ref());
         return quote! { #meta #vis #sig { #body } }.into();
     }
 
     let sig = &input.sig;
-    let body = sync_body(block, &name_str);
+    let body = sync_body(block, &name_str, response_input_ident.as_ref());
     quote! { #meta #vis #sig { #body } }.into()
 }
 
+fn first_arg_ident(sig: &syn::Signature) -> Option<syn::Ident> {
+    if let Some(syn::FnArg::Typed(pt)) = sig.inputs.first() {
+        if let syn::Pat::Ident(pi) = &*pt.pat {
+            return Some(pi.ident.clone());
+        }
+    }
+    None
+}
+
 #[cfg(feature = "trace")]
-fn sync_body(block: &syn::Block, name_str: &str) -> TokenStream2 {
+fn sync_body(
+    block: &syn::Block,
+    name_str: &str,
+    response_input: Option<&syn::Ident>,
+) -> TokenStream2 {
+    let snapshot = match response_input {
+        Some(id) => quote! { let __jig_input_ok = ::jigs::Status::ok(&#id); },
+        None => quote! { let __jig_input_ok = true; },
+    };
     quote! {
+        #snapshot
         let __jig_idx = ::jigs::trace::enter(#name_str);
         let __jig_start = ::std::time::Instant::now();
         let __jig_result = (move || #block)();
-        let __jig_ok = ::jigs::Status::ok(&__jig_result);
-        let __jig_err = ::jigs::Status::error(&__jig_result);
+        let mut __jig_ok = ::jigs::Status::ok(&__jig_result);
+        let mut __jig_err = ::jigs::Status::error(&__jig_result);
+        if !__jig_input_ok && !__jig_ok {
+            __jig_ok = true;
+            __jig_err = None;
+        }
         ::jigs::trace::exit(__jig_idx, __jig_start.elapsed(), __jig_ok, __jig_err);
         __jig_result
     }
 }
 
 #[cfg(not(feature = "trace"))]
-fn sync_body(block: &syn::Block, _name_str: &str) -> TokenStream2 {
+fn sync_body(
+    block: &syn::Block,
+    _name_str: &str,
+    _response_input: Option<&syn::Ident>,
+) -> TokenStream2 {
     quote! { #block }
 }
 
 #[cfg(feature = "trace")]
-fn async_body(block: &syn::Block, name_str: &str) -> TokenStream2 {
+fn async_body(
+    block: &syn::Block,
+    name_str: &str,
+    response_input: Option<&syn::Ident>,
+) -> TokenStream2 {
+    let snapshot = match response_input {
+        Some(id) => quote! { let __jig_input_ok = ::jigs::Status::ok(&#id); },
+        None => quote! { let __jig_input_ok = true; },
+    };
     quote! {
         ::jigs::Pending(async move {
+            #snapshot
             let __jig_idx = ::jigs::trace::enter(#name_str);
             let __jig_start = ::std::time::Instant::now();
             let __jig_result = (async move #block).await;
-            let __jig_ok = ::jigs::Status::ok(&__jig_result);
-            let __jig_err = ::jigs::Status::error(&__jig_result);
+            let mut __jig_ok = ::jigs::Status::ok(&__jig_result);
+            let mut __jig_err = ::jigs::Status::error(&__jig_result);
+            if !__jig_input_ok && !__jig_ok {
+                __jig_ok = true;
+                __jig_err = None;
+            }
             ::jigs::trace::exit(__jig_idx, __jig_start.elapsed(), __jig_ok, __jig_err);
             __jig_result
         })
@@ -91,7 +136,11 @@ fn async_body(block: &syn::Block, name_str: &str) -> TokenStream2 {
 }
 
 #[cfg(not(feature = "trace"))]
-fn async_body(block: &syn::Block, _name_str: &str) -> TokenStream2 {
+fn async_body(
+    block: &syn::Block,
+    _name_str: &str,
+    _response_input: Option<&syn::Ident>,
+) -> TokenStream2 {
     quote! { ::jigs::Pending(async move #block) }
 }
 
