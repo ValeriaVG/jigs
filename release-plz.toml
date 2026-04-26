@@ -27,6 +27,11 @@ release = true
 publish = true
 
 [[package]]
+name = "jigs-map"
+release = true
+publish = true
+
+[[package]]
 name = "jigs"
 release = true
 publish = true
