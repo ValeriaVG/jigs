@@ -251,6 +251,11 @@ fn handle(request: Request) -&gt; Response {
     <span class="ex-desc">Sketch of a retrieval-augmented generation pipeline.</span>
     <span class="ex-src"><a href="https://github.com/ValeriaVG/jigs/tree/main/examples/cf-rag" target="_blank" rel="noopener">src</a></span>
   </li>
+  <li>
+    <span class="ex-name"><a href="todo-api/" target="_blank" rel="noopener">todo-api</a></span>
+    <span class="ex-desc">Multithreaded todo API with <code>fork!</code>-based routing at multiple nesting depths.</span>
+    <span class="ex-src"><a href="https://github.com/ValeriaVG/jigs/tree/main/examples/todo-api" target="_blank" rel="noopener">src</a></span>
+  </li>
 </ul>
 
 <h2 id="install">Install</h2>
@@ -290,6 +295,17 @@ fn main() {
 
 <p>The type system enforces ordering: once you hold a <code>Response</code>, you can't chain a jig that expects a <code>Request</code>. Errored responses and <code>Branch::Done</code> short-circuit the rest.</p>
 
+<p>For multi-arm dispatch use <code>fork!</code>. First matching predicate wins, <code>_</code> is the default:</p>
+
+<pre><code>#[jig]
+fn route(req: Request&lt;HttpRequest&gt;) -&gt; Response&lt;String&gt; {
+    fork!(req,
+        |r: &amp;HttpRequest| r.path == "/"                  =&gt; root,
+        |r: &amp;HttpRequest| r.path.starts_with("/hello/")  =&gt; hello,
+        _ =&gt; not_found,
+    )
+}</code></pre>
+
 <h2 id="map">Generate a map</h2>
 <p>Render an HTML map or a Mermaid-flavored Markdown one straight from your code:</p>
 
@@ -328,11 +344,13 @@ route_to_feature err 500
   <li class="done">time tracing</li>
   <li class="done">tree + NDJSON logging</li>
   <li class="done">interactive map generation</li>
-  <li class="open">more complex examples</li>
+  <li class="done">more complex examples (todo-api)</li>
 </ul>
 
 <h3>Maybe</h3>
 <ul class="roadmap">
+  <li class="open">IDE extension to view jigs in the editor</li>
+  <li class="open">terminal jigs-map</li>
   <li class="open">runtime tracing rendered onto the map</li>
   <li class="open">trace remote jigs services as one system</li>
 </ul>
