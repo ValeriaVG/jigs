@@ -5,6 +5,7 @@ members = [
     "crates/jigs-core",
     "crates/jigs-macros",
     "examples/hello",
+    "examples/http",
 ]
 
 [workspace.package]

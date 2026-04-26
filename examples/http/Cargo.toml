@@ -1,0 +1,8 @@
+[package]
+name = "jigs-example-http"
+version = "0.0.0"
+edition.workspace = true
+publish = false
+
+[dependencies]
+jigs = { path = "../../crates/jigs" }
