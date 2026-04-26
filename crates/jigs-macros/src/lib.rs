@@ -135,8 +135,11 @@ fn collect_chain(block: &syn::Block) -> Vec<String> {
             syn::visit::visit_expr(self, &m.receiver);
             if m.method == "then" {
                 if let Some(Expr::Path(p)) = m.args.first() {
-                    if let Some(id) = p.path.get_ident() {
-                        self.0.push(id.to_string());
+                    if let Some(seg) = p.path.segments.last() {
+                        let name = seg.ident.to_string();
+                        if !self.0.iter().any(|n| n == &name) {
+                            self.0.push(name);
+                        }
                     }
                 }
             }
