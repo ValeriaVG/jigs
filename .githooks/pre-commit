@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if ! cargo fmt --all -- --check; then
+    echo
+    echo "cargo fmt found formatting issues. Run 'cargo fmt --all' and re-stage."
+    exit 1
+fi
