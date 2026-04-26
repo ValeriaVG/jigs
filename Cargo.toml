@@ -15,7 +15,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.0.2"
+version = "0.0.3"
 edition = "2021"
 license = "MIT"
 repository = "https://github.com/ValeriaVG/jigs"
@@ -27,9 +27,9 @@ keywords = ["pipeline", "framework", "middleware", "request", "tracing"]
 categories = ["asynchronous", "rust-patterns", "web-programming"]
 
 [workspace.dependencies]
-jigs-core = { version = "=0.0.2", path = "crates/jigs-core" }
-jigs-macros = { version = "=0.0.2", path = "crates/jigs-macros" }
-jigs-trace = { version = "=0.0.2", path = "crates/jigs-trace" }
-jigs-log = { version = "=0.0.2", path = "crates/jigs-log" }
-jigs-map = { version = "=0.0.2", path = "crates/jigs-map" }
+jigs-core = { version = "=0.0.3", path = "crates/jigs-core" }
+jigs-macros = { version = "=0.0.3", path = "crates/jigs-macros" }
+jigs-trace = { version = "=0.0.3", path = "crates/jigs-trace" }
+jigs-log = { version = "=0.0.3", path = "crates/jigs-log" }
+jigs-map = { version = "=0.0.3", path = "crates/jigs-map" }
 inventory = "0.3"
