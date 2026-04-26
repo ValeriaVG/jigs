@@ -1,6 +1,4 @@
 [workspace]
-# Default everything off; the four publishable crates opt in below.
-# Any new example added to the workspace is automatically ignored.
 release = false
 publish = false
 dependencies_update = true
