@@ -194,14 +194,12 @@ fn emit(
             Some(cm) if !cm.chain.is_empty() => {
                 emit(out, all, c.name, homes, seen, depth + 1, false);
             }
-            _ if c.kind == ChainKind::Fork => {
-                // Re-mention the leaf only inside its assigned home — the
-                // shallowest dispatcher that references it as an arm. This
-                // lets mermaid place shared leaves at their LCA rather
-                // than capturing them in the first dispatcher visited.
-                if homes.get(c.name).copied() == Some(name) {
-                    writeln!(out, "{edge_pad}{}", c.name).ok();
-                }
+            // Re-mention the leaf only inside its assigned home — the
+            // shallowest dispatcher that references it as an arm. This
+            // lets mermaid place shared leaves at their LCA rather
+            // than capturing them in the first dispatcher visited.
+            _ if c.kind == ChainKind::Fork && homes.get(c.name).copied() == Some(name) => {
+                writeln!(out, "{edge_pad}{}", c.name).ok();
             }
             _ => {}
         }
