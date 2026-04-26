@@ -1,4 +1,4 @@
-use jigs::{jig, trace::Entry, Branch, Request, Response};
+use jigs::{jig, Branch, Request, Response};
 
 #[jig]
 fn log_incoming(req: Request<String>) -> Request<String> {
@@ -51,38 +51,10 @@ fn main() {
         Ok(v) => println!("{v}"),
         Err(e) => println!("ERROR: {e}"),
     }
-    print!("{}", render(&jigs::trace::take()));
-}
-
-fn render(entries: &[Entry]) -> String {
-    let labels: Vec<String> = entries
-        .iter()
-        .map(|e| {
-            let indent = if e.depth == 0 {
-                String::new()
-            } else {
-                format!("{}└─ ", "  ".repeat(e.depth - 1))
-            };
-            format!("{}{}", indent, e.name)
-        })
-        .collect();
-    let width = labels.iter().map(|l| l.chars().count()).max().unwrap_or(0);
-
-    let mut out = String::new();
-    for (label, e) in labels.iter().zip(entries) {
-        let pad = width - label.chars().count();
-        let mark = if e.ok { "✓" } else { "✗" };
-        let detail = match &e.error {
-            Some(msg) => format!("ERROR: {msg}"),
-            None => format!("{:?}", e.duration),
-        };
-        out.push_str(&format!(
-            "{}{}  {}  {}\n",
-            label,
-            " ".repeat(pad),
-            mark,
-            detail
-        ));
+    let entries = jigs::trace::take();
+    if std::env::var("JIGS_LOG_JSON").is_ok() {
+        print!("{}", jigs::log::render_ndjson(&entries));
+    } else {
+        print!("{}", jigs::log::render_tree(&entries));
     }
-    out
 }

@@ -80,6 +80,18 @@ route_to_feature ✗  ERROR 500
   └─ check_permissions ✗  ERROR: DB Timeout
 ```
 
+With the `trace` feature on, drain the per-thread buffer and render it in
+either of two formats:
+
+```rust
+let entries = jigs::trace::take();
+print!("{}", jigs::log::render_tree(&entries));   // human-readable
+print!("{}", jigs::log::render_ndjson(&entries)); // one JSON object per line
+```
+
+The NDJSON form is meant for automated log ingestion; each line carries
+`name`, `depth`, `duration_ns`, `ok` and an optional `error` message.
+
 ## Everything agnostic
 
 `jigs` works with any existing or future framework that has two distinct types for incoming and outbound messages. Check the [examples](./examples) to see it in action.
@@ -87,7 +99,7 @@ route_to_feature ✗  ERROR 500
 ## Roadmap
 - [x] Basic functionality
 - [x] Time tracing (behind the `trace` feature)
-- [ ] Logging utils
+- [x] Logging utils (tree + NDJSON via `jigs-log`)
 - [ ] Generation of interactive map at compile time
 
 ## Maybe Roadmap

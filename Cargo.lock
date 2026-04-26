@@ -7,6 +7,7 @@ name = "jigs"
 version = "0.0.1"
 dependencies = [
  "jigs-core",
+ "jigs-log",
  "jigs-macros",
  "jigs-trace",
 ]
@@ -35,6 +36,13 @@ name = "jigs-example-http"
 version = "0.0.0"
 dependencies = [
  "jigs",
+]
+
+[[package]]
+name = "jigs-log"
+version = "0.0.1"
+dependencies = [
+ "jigs-trace",
 ]
 
 [[package]]

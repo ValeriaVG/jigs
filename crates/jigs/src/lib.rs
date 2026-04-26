@@ -30,10 +30,14 @@
 //!
 //! # Features
 //!
-//! - `trace` — pulls in [`jigs_trace`] and instruments every `#[jig]` call.
+//! - `trace` — pulls in [`jigs_trace`] (data) and [`jigs_log`] (renderers),
+//!   and instruments every `#[jig]` call.
 
 pub use jigs_core::*;
 pub use jigs_macros::jig;
 
 #[cfg(feature = "trace")]
 pub use jigs_trace as trace;
+
+#[cfg(feature = "trace")]
+pub use jigs_log as log;

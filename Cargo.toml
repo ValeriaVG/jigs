@@ -5,6 +5,7 @@ members = [
     "crates/jigs-core",
     "crates/jigs-macros",
     "crates/jigs-trace",
+    "crates/jigs-log",
     "examples/hello",
     "examples/http",
     "examples/async",
@@ -26,3 +27,4 @@ categories = ["asynchronous", "rust-patterns", "web-programming"]
 jigs-core = { version = "=0.0.1", path = "crates/jigs-core" }
 jigs-macros = { version = "=0.0.1", path = "crates/jigs-macros" }
 jigs-trace = { version = "=0.0.1", path = "crates/jigs-trace" }
+jigs-log = { version = "=0.0.1", path = "crates/jigs-log" }

@@ -15,12 +15,13 @@ documentation = "https://docs.rs/jigs"
 
 [features]
 default = []
-trace = ["dep:jigs-trace", "jigs-macros/trace"]
+trace = ["dep:jigs-trace", "dep:jigs-log", "jigs-macros/trace"]
 
 [dependencies]
 jigs-core.workspace = true
 jigs-macros.workspace = true
 jigs-trace = { workspace = true, optional = true }
+jigs-log = { workspace = true, optional = true }
 
 [package.metadata.docs.rs]
 all-features = true

@@ -1,7 +1,7 @@
 mod http;
 
 use http::{read_request, write_response, HttpRequest, HttpResponse};
-use jigs::{jig, trace::Entry, Branch, Request, Response};
+use jigs::{jig, Branch, Request, Response};
 use std::net::TcpListener;
 
 #[jig]
@@ -104,40 +104,12 @@ fn main() -> std::io::Result<()> {
         if let Err(e) = write_response(&mut stream, &body) {
             eprintln!("write error: {e}");
         }
-        print!("{}", render(&jigs::trace::take()));
+        let entries = jigs::trace::take();
+        if std::env::var("JIGS_LOG_JSON").is_ok() {
+            print!("{}", jigs::log::render_ndjson(&entries));
+        } else {
+            print!("{}", jigs::log::render_tree(&entries));
+        }
     }
     Ok(())
-}
-
-fn render(entries: &[Entry]) -> String {
-    let labels: Vec<String> = entries
-        .iter()
-        .map(|e| {
-            let indent = if e.depth == 0 {
-                String::new()
-            } else {
-                format!("{}└─ ", "  ".repeat(e.depth - 1))
-            };
-            format!("{}{}", indent, e.name)
-        })
-        .collect();
-    let width = labels.iter().map(|l| l.chars().count()).max().unwrap_or(0);
-
-    let mut out = String::new();
-    for (label, e) in labels.iter().zip(entries) {
-        let pad = width - label.chars().count();
-        let mark = if e.ok { "ok" } else { "err" };
-        let detail = match &e.error {
-            Some(msg) => format!("ERROR: {msg}"),
-            None => format!("{:?}", e.duration),
-        };
-        out.push_str(&format!(
-            "{}{}  {}  {}\n",
-            label,
-            " ".repeat(pad),
-            mark,
-            detail
-        ));
-    }
-    out
 }
