@@ -17,7 +17,7 @@
 //! `Response::is_ok` themselves.
 
 pub mod meta;
-pub use meta::{all as all_jigs, find as find_jig, JigMeta};
+pub use meta::{all as all_jigs, find as find_jig, ChainKind, ChainStep, JigMeta};
 
 #[doc(hidden)]
 pub use inventory;
@@ -268,6 +268,42 @@ impl<T> Response<T> {
     {
         jig.run(self)
     }
+}
+
+/// Multi-arm fork. Predicates are checked in order; the first match
+/// consumes the request and its jig is run. If none match, the
+/// `_ => default` arm runs. Every arm must produce the same `Out` type;
+/// each arm's internal pipeline can have its own intermediate types.
+///
+/// ```ignore
+/// fork!(req,
+///     |r| r.path.starts_with("/auth/")  => auth,
+///     |r| r.path.starts_with("/todos")  => todos,
+///     |r| r.path.starts_with("/labels") => labels,
+///     _ => not_found,
+/// )
+/// ```
+#[macro_export]
+macro_rules! fork {
+    ($req:expr, $($pred:expr => $jig:expr,)+ _ => $default:expr $(,)?) => {{
+        let __req = $req;
+        $crate::__fork_chain!(__req, $($pred => $jig,)+ ; $default)
+    }};
+}
+
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __fork_chain {
+    ($req:ident, $pred:expr => $jig:expr, $($rest_p:expr => $rest_j:expr,)* ; $default:expr) => {
+        if ($pred)(&$req.0) {
+            ($jig)($req)
+        } else {
+            $crate::__fork_chain!($req, $($rest_p => $rest_j,)* ; $default)
+        }
+    };
+    ($req:ident, ; $default:expr) => {
+        ($default)($req)
+    };
 }
 
 impl<Req, Resp> Branch<Req, Resp> {

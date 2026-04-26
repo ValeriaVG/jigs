@@ -22,7 +22,16 @@ pub fn jig(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let kind_str = return_kind(&input.sig.output);
     let input_str = input_kind(&input.sig);
     let is_async = input.sig.asyncness.is_some();
-    let chain = collect_chain(&input.block);
+    let chain_steps: Vec<TokenStream2> = collect_chain(&input.block)
+        .into_iter()
+        .map(|(name, kind)| {
+            let kind_ident = match kind {
+                ChainKindTok::Then => quote!(::jigs::ChainKind::Then),
+                ChainKindTok::Fork => quote!(::jigs::ChainKind::Fork),
+            };
+            quote! { ::jigs::ChainStep { name: #name, kind: #kind_ident } }
+        })
+        .collect();
     let meta = quote! {
         ::jigs::inventory::submit! {
             ::jigs::JigMeta {
@@ -32,7 +41,7 @@ pub fn jig(_attr: TokenStream, item: TokenStream) -> TokenStream {
                 kind: #kind_str,
                 input: #input_str,
                 is_async: #is_async,
-                chain: &[#(#chain),*],
+                chain: &[#(#chain_steps),*],
             }
         }
     };
@@ -177,27 +186,83 @@ fn last_type_ident(ty: &Type) -> Option<String> {
     None
 }
 
-fn collect_chain(block: &syn::Block) -> Vec<String> {
-    struct V(Vec<String>);
+#[derive(Clone, Copy)]
+enum ChainKindTok {
+    Then,
+    Fork,
+}
+
+fn collect_chain(block: &syn::Block) -> Vec<(String, ChainKindTok)> {
+    struct V(Vec<(String, ChainKindTok)>);
+    impl V {
+        fn push_unique(&mut self, name: String, kind: ChainKindTok) {
+            if !self.0.iter().any(|(n, _)| n == &name) {
+                self.0.push((name, kind));
+            }
+        }
+        fn push_path(&mut self, p: &syn::Path, kind: ChainKindTok) {
+            if let Some(seg) = p.segments.last() {
+                self.push_unique(seg.ident.to_string(), kind);
+            }
+        }
+    }
     impl<'ast> Visit<'ast> for V {
         fn visit_expr_method_call(&mut self, m: &'ast ExprMethodCall) {
             syn::visit::visit_expr(self, &m.receiver);
             if m.method == "then" {
                 if let Some(Expr::Path(p)) = m.args.first() {
-                    if let Some(seg) = p.path.segments.last() {
-                        let name = seg.ident.to_string();
-                        if !self.0.iter().any(|n| n == &name) {
-                            self.0.push(name);
-                        }
-                    }
+                    self.push_path(&p.path, ChainKindTok::Then);
                 }
             }
             for a in &m.args {
                 syn::visit::visit_expr(self, a);
             }
         }
+        fn visit_macro(&mut self, mac: &'ast syn::Macro) {
+            let last = mac
+                .path
+                .segments
+                .last()
+                .map(|s| s.ident.to_string())
+                .unwrap_or_default();
+            if last == "fork" {
+                if let Ok(args) = syn::parse2::<ForkArgs>(mac.tokens.clone()) {
+                    for j in &args.arms {
+                        self.push_path(j, ChainKindTok::Fork);
+                    }
+                    self.push_path(&args.default, ChainKindTok::Fork);
+                }
+            }
+        }
     }
     let mut v = V(Vec::new());
     v.visit_block(block);
     v.0
+}
+
+struct ForkArgs {
+    arms: Vec<syn::Path>,
+    default: syn::Path,
+}
+
+impl syn::parse::Parse for ForkArgs {
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        let _req: syn::Expr = input.parse()?;
+        input.parse::<syn::Token![,]>()?;
+        let mut arms = Vec::new();
+        loop {
+            if input.peek(syn::Token![_]) {
+                input.parse::<syn::Token![_]>()?;
+                input.parse::<syn::Token![=>]>()?;
+                let default: syn::Path = input.parse()?;
+                let _: Option<syn::Token![,]> = input.parse().ok();
+                return Ok(ForkArgs { arms, default });
+            }
+            let _pred: syn::Expr = input.parse()?;
+            input.parse::<syn::Token![=>]>()?;
+            let jig: syn::Path = input.parse()?;
+            input.parse::<syn::Token![,]>()?;
+            arms.push(jig);
+        }
+    }
 }

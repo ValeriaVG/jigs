@@ -46,7 +46,7 @@ fn reachable(
         }
         if let Some(m) = all.get(name.as_str()) {
             for c in m.chain {
-                stack.push((*c).to_string());
+                stack.push(c.name.to_string());
             }
             out.insert(name, *m);
         }
@@ -95,7 +95,18 @@ fn encode(
             if j > 0 {
                 s.push(',');
             }
-            push_json_str(&mut s, c);
+            push_json_str(&mut s, c.name);
+        }
+        s.push_str("],\"child_kinds\":[");
+        for (j, c) in m.chain.iter().enumerate() {
+            if j > 0 {
+                s.push(',');
+            }
+            let k = match c.kind {
+                jigs_core::ChainKind::Then => "then",
+                jigs_core::ChainKind::Fork => "fork",
+            };
+            push_json_str(&mut s, k);
         }
         s.push_str("]}");
     }
@@ -152,7 +163,15 @@ fn esc_attr(s: &str) -> String {
 mod tests {
     use super::*;
 
-    fn meta(name: &'static str, kind: &'static str, chain: &'static [&'static str]) -> JigMeta {
+    fn meta(name: &'static str, kind: &'static str, chain: &[&'static str]) -> JigMeta {
+        let v: Vec<jigs_core::ChainStep> = chain
+            .iter()
+            .map(|n| jigs_core::ChainStep {
+                name: n,
+                kind: jigs_core::ChainKind::Then,
+            })
+            .collect();
+        let leaked: &'static [jigs_core::ChainStep] = Box::leak(v.into_boxed_slice());
         JigMeta {
             name,
             file: "test.rs",
@@ -160,7 +179,7 @@ mod tests {
             kind,
             input: "Request",
             is_async: false,
-            chain,
+            chain: leaked,
         }
     }
 

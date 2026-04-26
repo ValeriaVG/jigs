@@ -36,7 +36,11 @@ fn macro_registers_jigs_in_inventory() {
 #[test]
 fn macro_records_chain_in_textual_order() {
     let entry_meta = jigs::find_jig("entry").expect("entry registered");
-    assert_eq!(entry_meta.chain, &["validate", "guard", "finalize"]);
+    let names: Vec<&str> = entry_meta.chain_names().collect();
+    assert_eq!(names, &["validate", "guard", "finalize"]);
+    for s in entry_meta.chain {
+        assert_eq!(s.kind, jigs::ChainKind::Then);
+    }
 }
 
 #[test]

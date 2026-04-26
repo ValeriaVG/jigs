@@ -8,8 +8,8 @@
 //! `last_leaf(composite) → b`, with `composite`'s own internals laid out
 //! inside its subgraph.
 
-use jigs_core::JigMeta;
-use std::collections::{BTreeMap, HashSet};
+use jigs_core::{ChainKind, JigMeta};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fmt::Write;
 
 type Index = BTreeMap<&'static str, &'static JigMeta>;
@@ -49,11 +49,67 @@ fn render(all: &Index, entry: &str) -> String {
         writeln!(out, "  {name}{open}\"{label}\"{close}").ok();
     }
     out.push('\n');
-    emit(&mut out, all, entry, &mut HashSet::new(), 0, true);
+    let homes = compute_leaf_homes(entry, all);
+    emit(&mut out, all, entry, &homes, &mut HashSet::new(), 0, true);
     out.push_str(
         "\n  %% shape legend: rect = Request → Request, rhombus = switching (Request → Response/Branch), stadium = Response → Response\n",
     );
     out
+}
+
+/// Returns true if `m` is a fork dispatcher: every chain entry was added
+/// via `fork!`. We treat such jigs as decision points rather than as
+/// linear pipelines.
+fn is_fork_dispatcher(m: &JigMeta) -> bool {
+    !m.chain.is_empty() && m.chain.iter().all(|c| c.kind == ChainKind::Fork)
+}
+
+/// For each leaf jig that appears as a fork-arm of one or more
+/// dispatchers, pick the shallowest such dispatcher in the inclusion
+/// tree. That dispatcher becomes the leaf's "home" — the only place the
+/// leaf will be re-mentioned inside a subgraph block. Shared leaves
+/// (e.g., a `not_found` reused across dispatchers) end up at their LCA
+/// instead of being silently captured by the first dispatcher that
+/// references them.
+fn compute_leaf_homes<'a>(entry: &'a str, all: &'a Index) -> HashMap<&'a str, &'a str> {
+    let mut depths: HashMap<&'a str, usize> = HashMap::new();
+    let mut leaf_parents: HashMap<&'a str, Vec<&'a str>> = HashMap::new();
+    walk_for_homes(entry, all, 0, &mut depths, &mut leaf_parents);
+    leaf_parents
+        .into_iter()
+        .filter_map(|(leaf, parents)| {
+            parents
+                .into_iter()
+                .min_by_key(|p| depths.get(p).copied().unwrap_or(usize::MAX))
+                .map(|p| (leaf, p))
+        })
+        .collect()
+}
+
+fn walk_for_homes<'a>(
+    name: &'a str,
+    all: &'a Index,
+    depth: usize,
+    depths: &mut HashMap<&'a str, usize>,
+    leaf_parents: &mut HashMap<&'a str, Vec<&'a str>>,
+) {
+    if depths.contains_key(name) {
+        return;
+    }
+    depths.insert(name, depth);
+    let Some(m) = all.get(name) else { return };
+    if m.chain.is_empty() {
+        return;
+    }
+    for c in m.chain {
+        if c.kind == ChainKind::Fork {
+            let is_leaf = all.get(c.name).is_none_or(|cm| cm.chain.is_empty());
+            if is_leaf {
+                leaf_parents.entry(c.name).or_default().push(name);
+            }
+        }
+        walk_for_homes(c.name, all, depth + 1, depths, leaf_parents);
+    }
 }
 
 /// Pick the mermaid shape and label for a leaf node. Categories:
@@ -91,7 +147,7 @@ fn collect_leaves(name: &str, all: &Index, seen: &mut HashSet<String>, out: &mut
     match all.get(name) {
         Some(m) if !m.chain.is_empty() => {
             for c in m.chain {
-                collect_leaves(c, all, seen, out);
+                collect_leaves(c.name, all, seen, out);
             }
         }
         _ => out.push(name.to_string()),
@@ -102,6 +158,7 @@ fn emit(
     out: &mut String,
     all: &Index,
     name: &str,
+    homes: &HashMap<&str, &str>,
     seen: &mut HashSet<String>,
     depth: usize,
     is_root: bool,
@@ -124,13 +181,29 @@ fn emit(
         format!("{pad}  ")
     };
     for w in m.chain.windows(2) {
-        let from = last_leaf(w[0], all, &mut HashSet::new());
-        let to = first_leaf(w[1], all, &mut HashSet::new());
+        // Sibling fork arms don't flow into each other — exactly one runs.
+        if w[0].kind == ChainKind::Fork && w[1].kind == ChainKind::Fork {
+            continue;
+        }
+        let from = last_leaf(w[0].name, all, &mut HashSet::new());
+        let to = first_leaf(w[1].name, all, &mut HashSet::new());
         writeln!(out, "{edge_pad}{from} --> {to}").ok();
     }
     for c in m.chain {
-        if all.get(c).is_some_and(|m| !m.chain.is_empty()) {
-            emit(out, all, c, seen, depth + 1, false);
+        match all.get(c.name) {
+            Some(cm) if !cm.chain.is_empty() => {
+                emit(out, all, c.name, homes, seen, depth + 1, false);
+            }
+            _ if c.kind == ChainKind::Fork => {
+                // Re-mention the leaf only inside its assigned home — the
+                // shallowest dispatcher that references it as an arm. This
+                // lets mermaid place shared leaves at their LCA rather
+                // than capturing them in the first dispatcher visited.
+                if homes.get(c.name).copied() == Some(name) {
+                    writeln!(out, "{edge_pad}{}", c.name).ok();
+                }
+            }
+            _ => {}
         }
     }
     if !is_root {
@@ -143,7 +216,16 @@ fn first_leaf<'a>(name: &'a str, all: &'a Index, seen: &mut HashSet<&'a str>) ->
         return name;
     }
     match all.get(name) {
-        Some(m) if !m.chain.is_empty() => first_leaf(m.chain[0], all, seen),
+        Some(m) if !m.chain.is_empty() => {
+            // Fork dispatchers have no single "first" leaf — the first thing
+            // the request meets is the dispatcher subgraph border. Stop here
+            // so the bridge edge lands on the subgraph, not on one arm.
+            if is_fork_dispatcher(m) {
+                name
+            } else {
+                first_leaf(m.chain[0].name, all, seen)
+            }
+        }
         _ => name,
     }
 }
@@ -153,7 +235,13 @@ fn last_leaf<'a>(name: &'a str, all: &'a Index, seen: &mut HashSet<&'a str>) -> 
         return name;
     }
     match all.get(name) {
-        Some(m) if !m.chain.is_empty() => last_leaf(m.chain[m.chain.len() - 1], all, seen),
+        Some(m) if !m.chain.is_empty() => {
+            if is_fork_dispatcher(m) {
+                name
+            } else {
+                last_leaf(m.chain[m.chain.len() - 1].name, all, seen)
+            }
+        }
         _ => name,
     }
 }
@@ -161,6 +249,7 @@ fn last_leaf<'a>(name: &'a str, all: &'a Index, seen: &mut HashSet<&'a str>) -> 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use jigs_core::ChainStep;
 
     fn fake(items: Vec<JigMeta>) -> Index {
         items
@@ -172,15 +261,37 @@ mod tests {
             .collect()
     }
 
-    fn meta(name: &'static str, kind: &'static str, chain: &'static [&'static str]) -> JigMeta {
-        meta_full(name, "Request", kind, false, chain)
+    fn then_chain(names: &[&'static str]) -> &'static [ChainStep] {
+        let v: Vec<ChainStep> = names
+            .iter()
+            .map(|n| ChainStep {
+                name: n,
+                kind: ChainKind::Then,
+            })
+            .collect();
+        Box::leak(v.into_boxed_slice())
+    }
+
+    fn fork_chain(names: &[&'static str]) -> &'static [ChainStep] {
+        let v: Vec<ChainStep> = names
+            .iter()
+            .map(|n| ChainStep {
+                name: n,
+                kind: ChainKind::Fork,
+            })
+            .collect();
+        Box::leak(v.into_boxed_slice())
+    }
+
+    fn meta(name: &'static str, kind: &'static str, chain: &[&'static str]) -> JigMeta {
+        meta_full(name, "Request", kind, false, then_chain(chain))
     }
     fn meta_full(
         name: &'static str,
         input: &'static str,
         kind: &'static str,
         is_async: bool,
-        chain: &'static [&'static str],
+        chain: &'static [ChainStep],
     ) -> JigMeta {
         JigMeta {
             name,
@@ -233,10 +344,16 @@ mod tests {
     #[test]
     fn shape_varies_by_category() {
         let all = fake(vec![
-            meta_full("root", "Request", "Response", false, &["a", "b", "c"]),
-            meta_full("a", "Request", "Request", false, &[]),
-            meta_full("b", "Request", "Branch", false, &[]),
-            meta_full("c", "Response", "Response", false, &[]),
+            meta_full(
+                "root",
+                "Request",
+                "Response",
+                false,
+                then_chain(&["a", "b", "c"]),
+            ),
+            meta_full("a", "Request", "Request", false, then_chain(&[])),
+            meta_full("b", "Request", "Branch", false, then_chain(&[])),
+            meta_full("c", "Response", "Response", false, then_chain(&[])),
         ]);
         let m = render(&all, "root");
         assert!(m.contains("a[\"a"), "Request→Request should be a rect: {m}");
@@ -253,11 +370,105 @@ mod tests {
     #[test]
     fn async_prefix_in_label() {
         let all = fake(vec![
-            meta_full("root", "Request", "Response", false, &["a"]),
-            meta_full("a", "Request", "Request", true, &[]),
+            meta_full("root", "Request", "Response", false, then_chain(&["a"])),
+            meta_full("a", "Request", "Request", true, then_chain(&[])),
         ]);
         let m = render(&all, "root");
         assert!(m.contains("async req → req"), "async marker missing: {m}");
+    }
+
+    #[test]
+    fn leaf_fork_arms_are_placed_inside_parent_subgraph() {
+        let all = fake(vec![
+            meta("entry", "Response", &["router"]),
+            meta_full(
+                "router",
+                "Request",
+                "Response",
+                false,
+                fork_chain(&["a", "b"]),
+            ),
+            meta("a", "Response", &[]),
+            meta("b", "Response", &[]),
+        ]);
+        let m = render(&all, "entry");
+        let after = m.split("subgraph router").nth(1).unwrap_or("");
+        let block = after.split("end").next().unwrap_or("");
+        assert!(block.contains("a"), "router subgraph should contain a: {m}");
+        assert!(block.contains("b"), "router subgraph should contain b: {m}");
+    }
+
+    #[test]
+    fn shared_leaf_arm_lives_at_lca() {
+        // `not_found` is a fork arm of both inner dispatchers. The shallowest
+        // dispatcher that references it should be the only one that captures
+        // it visually.
+        let all = fake(vec![
+            meta("entry", "Response", &["outer"]),
+            meta_full(
+                "outer",
+                "Request",
+                "Response",
+                false,
+                fork_chain(&["inner_a", "inner_b", "not_found"]),
+            ),
+            meta_full(
+                "inner_a",
+                "Request",
+                "Response",
+                false,
+                fork_chain(&["leaf_a", "not_found"]),
+            ),
+            meta_full(
+                "inner_b",
+                "Request",
+                "Response",
+                false,
+                fork_chain(&["leaf_b", "not_found"]),
+            ),
+            meta("leaf_a", "Response", &[]),
+            meta("leaf_b", "Response", &[]),
+            meta("not_found", "Response", &[]),
+        ]);
+        let m = render(&all, "entry");
+        // inner_a should not re-mention not_found (its inner block ends before
+        // the matching `end`).
+        let inner_a_block = m.split("subgraph inner_a").nth(1).unwrap_or("");
+        let inner_a_block = inner_a_block.split("end").next().unwrap_or("");
+        assert!(
+            !inner_a_block.contains("not_found"),
+            "not_found should NOT live inside inner_a: {m}"
+        );
+        // outer should re-mention not_found before its own closing `end`.
+        let outer_block = m.split("subgraph outer").nth(1).unwrap_or("");
+        let outer_block = outer_block
+            .split("\n  end\n\n  %%")
+            .next()
+            .unwrap_or(outer_block);
+        assert!(
+            outer_block.contains("not_found"),
+            "not_found should live inside outer (LCA): {m}"
+        );
+        assert!(inner_a_block.contains("leaf_a"), "{m}");
+    }
+
+    #[test]
+    fn fork_arms_are_siblings_no_inter_arm_edges() {
+        let all = fake(vec![
+            meta_full(
+                "router",
+                "Request",
+                "Response",
+                false,
+                fork_chain(&["a", "b", "c"]),
+            ),
+            meta("a", "Response", &[]),
+            meta("b", "Response", &[]),
+            meta("c", "Response", &[]),
+        ]);
+        let m = render(&all, "router");
+        assert!(!m.contains("a --> b"), "no edge between fork siblings: {m}");
+        assert!(!m.contains("b --> c"), "no edge between fork siblings: {m}");
     }
 
     #[test]

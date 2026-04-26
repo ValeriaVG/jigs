@@ -141,9 +141,10 @@ The NDJSON form is meant for automated log ingestion; each line carries
 - [ ] Add more complex examples
 
 ## Maybe Roadmap
+- IDE extension to view jigs in the editor
+- Terminal jigs-map
 - Runtime tracing with interactive map
 - Ability to trace and view remote jigs services as one system
-
 
 ## License
 

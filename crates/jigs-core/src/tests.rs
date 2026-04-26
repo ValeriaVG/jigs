@@ -125,6 +125,57 @@ fn pending_threads_value_through_sync_jig() {
 }
 
 #[test]
+fn fork_picks_first_matching_arm() {
+    fn even(r: Request<i32>) -> Response<String> {
+        Response::ok(format!("even {}", r.0))
+    }
+    fn small(r: Request<i32>) -> Response<String> {
+        Response::ok(format!("small {}", r.0))
+    }
+    fn fallback(r: Request<i32>) -> Response<String> {
+        Response::ok(format!("fallback {}", r.0))
+    }
+    let out = crate::fork!(Request(4),
+        |n: &i32| *n % 2 == 0 => even,
+        |n: &i32| *n < 100    => small,
+        _ => fallback,
+    );
+    assert_eq!(out.inner.unwrap(), "even 4");
+}
+
+#[test]
+fn fork_falls_through_to_default() {
+    fn never(_: Request<i32>) -> Response<String> {
+        panic!("should not run")
+    }
+    fn fallback(r: Request<i32>) -> Response<String> {
+        Response::ok(format!("got {}", r.0))
+    }
+    let out = crate::fork!(Request(3),
+        |n: &i32| *n > 100 => never,
+        |n: &i32| *n < 0   => never,
+        _ => fallback,
+    );
+    assert_eq!(out.inner.unwrap(), "got 3");
+}
+
+#[test]
+fn fork_later_arms_are_skipped_after_match() {
+    fn first(_: Request<i32>) -> Response<String> {
+        Response::ok("first".into())
+    }
+    fn second(_: Request<i32>) -> Response<String> {
+        panic!("should not run after match")
+    }
+    let out = crate::fork!(Request(1),
+        |_: &i32| true => first,
+        |_: &i32| true => second,
+        _ => second,
+    );
+    assert_eq!(out.inner.unwrap(), "first");
+}
+
+#[test]
 fn branch_then_req_to_req_stays_in_branch() {
     fn guard(r: Request<i32>) -> Branch<i32, String> {
         Branch::Continue(r)

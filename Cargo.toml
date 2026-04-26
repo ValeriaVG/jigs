@@ -12,6 +12,7 @@ members = [
     "examples/async",
     "examples/checkout",
     "examples/cf-rag",
+    "examples/todo-api",
 ]
 
 [workspace.package]

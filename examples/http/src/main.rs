@@ -1,7 +1,7 @@
 mod http;
 
 use http::{read_request, write_response, HttpRequest, HttpResponse};
-use jigs::{jig, Branch, Request, Response};
+use jigs::{fork, jig, Branch, Request, Response};
 use std::net::TcpListener;
 
 #[jig]
@@ -19,25 +19,24 @@ fn only_get(req: Request<HttpRequest>) -> Branch<HttpRequest, HttpResponse> {
     }
 }
 
+fn is_root(r: &HttpRequest) -> bool {
+    r.path == "/"
+}
 #[jig]
-fn root_route(req: Request<HttpRequest>) -> Branch<HttpRequest, HttpResponse> {
-    if req.0.path == "/" {
-        return Branch::Done(Response::ok(HttpResponse::ok("hello, world\n")));
-    }
-    Branch::Continue(req)
+fn root(_req: Request<HttpRequest>) -> Response<HttpResponse> {
+    Response::ok(HttpResponse::ok("hello, world\n"))
 }
 
+fn is_hello(r: &HttpRequest) -> bool {
+    r.path.strip_prefix("/hello/").is_some()
+}
 #[jig]
-fn hello_route(req: Request<HttpRequest>) -> Branch<HttpRequest, HttpResponse> {
-    let Some(name) = req.0.path.strip_prefix("/hello/") else {
-        return Branch::Continue(req);
-    };
+fn hello(req: Request<HttpRequest>) -> Response<HttpResponse> {
+    let name = req.0.path.strip_prefix("/hello/").unwrap_or("");
     if name.is_empty() || name.contains('/') {
-        return Branch::Done(Response::ok(HttpResponse::bad_request(
-            "provide a single name segment\n",
-        )));
+        return Response::ok(HttpResponse::bad_request("provide a single name segment\n"));
     }
-    Branch::Done(Response::ok(HttpResponse::ok(format!("hello, {name}\n"))))
+    Response::ok(HttpResponse::ok(format!("hello, {name}\n")))
 }
 
 #[jig]
@@ -47,7 +46,11 @@ fn not_found(_req: Request<HttpRequest>) -> Response<HttpResponse> {
 
 #[jig]
 fn route(req: Request<HttpRequest>) -> Response<HttpResponse> {
-    req.then(root_route).then(hello_route).then(not_found)
+    fork!(req,
+        is_root  => root,
+        is_hello => hello,
+        _ => not_found,
+    )
 }
 
 #[jig]

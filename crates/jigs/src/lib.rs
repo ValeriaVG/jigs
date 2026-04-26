@@ -34,6 +34,7 @@
 //!   and instruments every `#[jig]` call.
 
 pub use jigs_core::*;
+pub use jigs_core::{__fork_chain, fork};
 pub use jigs_macros::jig;
 
 #[cfg(feature = "trace")]
