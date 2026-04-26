@@ -101,7 +101,7 @@ dependencies = [
 
 [[package]]
 name = "jigs"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "jigs-core",
  "jigs-log",
@@ -112,7 +112,7 @@ dependencies = [
 
 [[package]]
 name = "jigs-core"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "inventory",
 ]
@@ -159,14 +159,14 @@ dependencies = [
 
 [[package]]
 name = "jigs-log"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "jigs-trace",
 ]
 
 [[package]]
 name = "jigs-macros"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -175,14 +175,14 @@ dependencies = [
 
 [[package]]
 name = "jigs-map"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "jigs-core",
 ]
 
 [[package]]
 name = "jigs-trace"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "jigs-core",
 ]
