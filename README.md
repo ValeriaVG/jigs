@@ -27,6 +27,8 @@ The main advantage, though, is that `jigs` generates a graph of your codebase at
 
 ![Pipeline map](./map.png)
 
+Try the [interactive examples](https://valeriavg.github.io/jigs/#examples) — each one is a real map rendered from an example crate in this repo.
+
 ## Install
 
 ```sh
