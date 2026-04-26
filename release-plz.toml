@@ -22,6 +22,11 @@ release = true
 publish = true
 
 [[package]]
+name = "jigs-log"
+release = true
+publish = true
+
+[[package]]
 name = "jigs"
 release = true
 publish = true
