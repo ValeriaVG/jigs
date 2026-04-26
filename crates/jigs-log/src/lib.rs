@@ -9,8 +9,8 @@
 
 pub use jigs_trace::Entry;
 
-mod tree;
 mod json;
+mod tree;
 
 pub use json::render_ndjson;
 pub use tree::render_tree;
