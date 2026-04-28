@@ -115,7 +115,7 @@ fn main() -> std::io::Result<()> {
 }
 ```
 
-The third argument to `to_html` is an optional editor URL template; pass e.g. `Some("vscodium://file/{path}:{line}")` for VSCodium, `vscode://file/{path}:{line}` for VS Code or Cursor, `idea://open?file={path}&line={line}` for JetBrains IDEs. With `None` the link falls back to `file://` and opens with your OS default.
+The third argument to `to_html` is an optional editor URL template. Use `{path}` for the absolute file path (local IDE handlers) or `{rel_path}` for the path relative to the workspace root (repo URLs); both forms also support `{line}`. Examples: `Some("vscodium://file/{path}:{line}")` for VSCodium, `vscode://file/{path}:{line}` for VS Code or Cursor, `idea://open?file={path}&line={line}` for JetBrains, `https://github.com/OWNER/REPO/blob/main/{rel_path}#L{line}` to link back to the repo. With `None` the link falls back to `file://` and opens with your OS default.
 
 The Markdown form embeds a Mermaid flowchart that renders inline on GitHub — see [`examples/http/map.md`](./examples/http/map.md).
 

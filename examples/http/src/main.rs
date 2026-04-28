@@ -80,7 +80,7 @@ fn main() -> std::io::Result<()> {
             jigs::map::to_html(
                 Some("handle"),
                 "http example",
-                Some("https://github.com/ValeriaVG/jigs/blob/main/{path}#L{line}"),
+                Some("https://github.com/ValeriaVG/jigs/blob/main/{rel_path}#L{line}"),
             ),
         )?;
         std::fs::write(

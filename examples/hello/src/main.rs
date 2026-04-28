@@ -56,7 +56,7 @@ fn main() {
             jigs::map::to_html(
                 Some("handle"),
                 "hello example",
-                Some("https://github.com/ValeriaVG/jigs/blob/main/{path}#L{line}"),
+                Some("https://github.com/ValeriaVG/jigs/blob/main/{rel_path}#L{line}"),
             ),
         )
         .expect("write index.html");

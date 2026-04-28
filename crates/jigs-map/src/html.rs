@@ -10,16 +10,18 @@ const TEMPLATE: &str = include_str!("template.html");
 /// `None`) as a complete HTML document. `title` is shown in the page header
 /// and `<title>` tag.
 ///
-/// `editor` is an optional URL template containing `{path}` and `{line}`
-/// placeholders. When set, the sidebar's file location becomes a link using
-/// the resolved template; when `None`, it renders as plain text. Common
-/// templates:
+/// `editor` is an optional URL template containing `{line}` plus either
+/// `{path}` (absolute file path, for local IDE handlers) or `{rel_path}`
+/// (path relative to the workspace root, for repo URLs). When set, the
+/// sidebar's file location becomes a link using the resolved template;
+/// when `None`, it renders as plain text. Common templates:
 ///
 /// - VS Code / Cursor / Windsurf: `vscode://file/{path}:{line}`
 /// - VSCodium: `vscodium://file/{path}:{line}`
 /// - JetBrains IDEs: `idea://open?file={path}&line={line}`
 /// - Sublime Text: `subl://{path}:{line}`
 /// - TextMate: `txmt://open/?url=file://{path}&line={line}`
+/// - GitHub: `https://github.com/OWNER/REPO/blob/main/{rel_path}#L{line}`
 pub fn to_html(entry: Option<&str>, title: &str, editor: Option<&str>) -> String {
     let all: BTreeMap<&'static str, &'static JigMeta> =
         jigs_core::all_jigs().map(|m| (m.name, m)).collect();

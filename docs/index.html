@@ -319,7 +319,7 @@ std::fs::write(
     jigs::map::to_markdown(Some("handle"), "my service"),
 )?;</code></pre>
 
-<p>The third argument to <code>to_html</code> is an editor URL template. <code>Some("vscode://file/{path}:{line}")</code> for VS Code or Cursor, <code>idea://open?file={path}&amp;line={line}</code> for JetBrains, or a GitHub blob URL if you want maps that link back to the repo.</p>
+<p>The third argument to <code>to_html</code> is an editor URL template. Use <code>{path}</code> for the absolute file path (local IDE handlers) or <code>{rel_path}</code> for the path relative to the workspace root (repo URLs); both also support <code>{line}</code>. Examples: <code>Some("vscode://file/{path}:{line}")</code> for VS Code or Cursor, <code>idea://open?file={path}&amp;line={line}</code> for JetBrains, or <code>https://github.com/OWNER/REPO/blob/main/{rel_path}#L{line}</code> to link back to the repo.</p>
 
 <h2 id="trace">Trace at runtime</h2>
 <p>With the <code>trace</code> feature on, every step records its timing. Drain the per-thread buffer and render it in either format:</p>

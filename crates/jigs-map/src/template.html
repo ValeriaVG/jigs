@@ -493,13 +493,14 @@
     }
 
     function editorHref(n) {
-      const path = n.file_abs || n.file;
       const tmpl = DATA.editor;
       if (tmpl) {
         return tmpl
-          .replace('{path}', encodeURI(path))
+          .replace('{rel_path}', encodeURI(n.file || ''))
+          .replace('{path}', encodeURI(n.file_abs || n.file || ''))
           .replace('{line}', String(n.line));
       }
+      const path = n.file_abs || n.file;
       const abs = path.startsWith('/') ? path : '/' + path;
       return 'file://' + encodeURI(abs);
     }

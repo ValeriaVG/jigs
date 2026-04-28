@@ -364,7 +364,7 @@
     <span class="group"><kbd>Esc</kbd> back up</span>
     <span class="group"><kbd>Alt</kbd>+<kbd>←</kbd> / <kbd>→</kbd> history</span>
   </footer>
-  <script id="data" type="application/json">{"entry":"handle","title":"async example","editor":"https://github.com/ValeriaVG/jigs/blob/main/{path}#L{line}","nodes":{"enrich":{"file":"examples/async/src/main.rs","line":26,"kind":"Request","input":"Request","async":true,"file_abs":"/Users/valeria/git/jigs/examples/async/src/main.rs","basename":"main.rs","children":[],"child_kinds":[]},"handle":{"file":"examples/async/src/main.rs","line":62,"kind":"Response","input":"Request","async":true,"file_abs":"/Users/valeria/git/jigs/examples/async/src/main.rs","basename":"main.rs","children":["log_incoming","enrich","require_account","render","log_outbound"],"child_kinds":["then","then","then","then","then"]},"log_incoming":{"file":"examples/async/src/main.rs","line":20,"kind":"Request","input":"Request","async":false,"file_abs":"/Users/valeria/git/jigs/examples/async/src/main.rs","basename":"main.rs","children":[],"child_kinds":[]},"log_outbound":{"file":"examples/async/src/main.rs","line":53,"kind":"Response","input":"Response","async":false,"file_abs":"/Users/valeria/git/jigs/examples/async/src/main.rs","basename":"main.rs","children":[],"child_kinds":[]},"render":{"file":"examples/async/src/main.rs","line":45,"kind":"Response","input":"Request","async":false,"file_abs":"/Users/valeria/git/jigs/examples/async/src/main.rs","basename":"main.rs","children":[],"child_kinds":[]},"require_account":{"file":"examples/async/src/main.rs","line":36,"kind":"Branch","input":"Request","async":false,"file_abs":"/Users/valeria/git/jigs/examples/async/src/main.rs","basename":"main.rs","children":[],"child_kinds":[]}}}</script>
+  <script id="data" type="application/json">{"entry":"handle","title":"async example","editor":"https://github.com/ValeriaVG/jigs/blob/main/{rel_path}#L{line}","nodes":{"enrich":{"file":"examples/async/src/main.rs","line":26,"kind":"Request","input":"Request","async":true,"file_abs":"/Users/valeria/git/jigs/examples/async/src/main.rs","basename":"main.rs","children":[],"child_kinds":[]},"handle":{"file":"examples/async/src/main.rs","line":62,"kind":"Response","input":"Request","async":true,"file_abs":"/Users/valeria/git/jigs/examples/async/src/main.rs","basename":"main.rs","children":["log_incoming","enrich","require_account","render","log_outbound"],"child_kinds":["then","then","then","then","then"]},"log_incoming":{"file":"examples/async/src/main.rs","line":20,"kind":"Request","input":"Request","async":false,"file_abs":"/Users/valeria/git/jigs/examples/async/src/main.rs","basename":"main.rs","children":[],"child_kinds":[]},"log_outbound":{"file":"examples/async/src/main.rs","line":53,"kind":"Response","input":"Response","async":false,"file_abs":"/Users/valeria/git/jigs/examples/async/src/main.rs","basename":"main.rs","children":[],"child_kinds":[]},"render":{"file":"examples/async/src/main.rs","line":45,"kind":"Response","input":"Request","async":false,"file_abs":"/Users/valeria/git/jigs/examples/async/src/main.rs","basename":"main.rs","children":[],"child_kinds":[]},"require_account":{"file":"examples/async/src/main.rs","line":36,"kind":"Branch","input":"Request","async":false,"file_abs":"/Users/valeria/git/jigs/examples/async/src/main.rs","basename":"main.rs","children":[],"child_kinds":[]}}}</script>
   <script>
   (() => {
     const DATA = JSON.parse(document.getElementById('data').textContent);
@@ -493,13 +493,14 @@
     }
 
     function editorHref(n) {
-      const path = n.file_abs || n.file;
       const tmpl = DATA.editor;
       if (tmpl) {
         return tmpl
-          .replace('{path}', encodeURI(path))
+          .replace('{rel_path}', encodeURI(n.file || ''))
+          .replace('{path}', encodeURI(n.file_abs || n.file || ''))
           .replace('{line}', String(n.line));
       }
+      const path = n.file_abs || n.file;
       const abs = path.startsWith('/') ? path : '/' + path;
       return 'file://' + encodeURI(abs);
     }
