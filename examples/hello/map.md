@@ -2,11 +2,11 @@
 
 ```mermaid
 flowchart TD
-  log_incoming["log_incoming<br/><i>req → req</i>"]
-  validate_incoming{"validate_incoming<br/><i>req → branch</i>"}
-  greet{"greet<br/><i>req → res</i>"}
-  shout(["shout<br/><i>res → res</i>"])
-  log_outbound(["log_outbound<br/><i>res → res</i>"])
+  log_incoming["log_incoming<br/><i>String → String</i>"]
+  validate_incoming{"validate_incoming<br/><i>String → Branch<String,String></i>"}
+  greet{"greet<br/><i>String → String</i>"}
+  shout(["shout<br/><i>String → String</i>"]])
+  log_outbound(["log_outbound<br/><i>String → String</i>"]])
 
 log_incoming --> validate_incoming
 validate_incoming --> greet

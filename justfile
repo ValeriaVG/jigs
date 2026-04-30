@@ -4,7 +4,7 @@ set shell := ["bash", "-cu"]
 crates := "jigs-core jigs-macros jigs-trace jigs-log jigs-map jigs"
 
 # Examples that opt into JIGS_MAP=1 map generation.
-examples := "hello http async checkout cf-rag todo-api"
+examples := "hello http async checkout cf-rag todo-api events"
 
 # List recipes.
 default:

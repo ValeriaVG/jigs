@@ -21,6 +21,8 @@ pub fn jig(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let name_str = input.sig.ident.to_string();
     let kind_str = return_kind(&input.sig.output);
     let input_str = input_kind(&input.sig);
+    let input_type_str = first_arg_payload(&input.sig);
+    let output_type_str = return_payload(&input.sig.output);
     let is_async = input.sig.asyncness.is_some();
     let chain_steps: Vec<TokenStream2> = collect_chain(&input.block)
         .into_iter()
@@ -40,7 +42,10 @@ pub fn jig(_attr: TokenStream, item: TokenStream) -> TokenStream {
                 line: line!(),
                 kind: #kind_str,
                 input: #input_str,
+                input_type: #input_type_str,
+                output_type: #output_type_str,
                 is_async: #is_async,
+                module: module_path!(),
                 chain: &[#(#chain_steps),*],
             }
         }
@@ -179,6 +184,68 @@ fn input_kind(sig: &syn::Signature) -> &'static str {
     }
 }
 
+fn first_arg_payload(sig: &syn::Signature) -> String {
+    let ty = match sig.inputs.first() {
+        Some(syn::FnArg::Typed(pt)) => &*pt.ty,
+        _ => return "?".into(),
+    };
+    payload_type(ty)
+}
+
+fn return_payload(ret: &ReturnType) -> String {
+    let ty = match ret {
+        ReturnType::Default => return "?".into(),
+        ReturnType::Type(_, t) => t,
+    };
+    payload_type(ty)
+}
+
+fn payload_type(ty: &Type) -> String {
+    if let Type::Path(p) = ty {
+        if let Some(seg) = p.path.segments.last() {
+            let name = seg.ident.to_string();
+            match name.as_str() {
+                "Request" | "Response" => {
+                    if let syn::PathArguments::AngleBracketed(ref ab) = seg.arguments {
+                        return generic_args_string(ab);
+                    }
+                }
+                "Branch" => {
+                    if let syn::PathArguments::AngleBracketed(ref ab) = seg.arguments {
+                        return format!("Branch<{}>", generic_args_string(ab));
+                    }
+                }
+                "Pending" => {
+                    if let syn::PathArguments::AngleBracketed(ref ab) = seg.arguments {
+                        return generic_args_string(ab);
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+    type_to_string(ty)
+}
+
+fn type_to_string(ty: &Type) -> String {
+    quote::quote!(#ty).to_string().replace(' ', "")
+}
+
+fn generic_args_string(args: &syn::AngleBracketedGenericArguments) -> String {
+    let mut out = String::new();
+    for (i, arg) in args.args.iter().enumerate() {
+        if i > 0 {
+            out.push(',');
+        }
+        match arg {
+            syn::GenericArgument::Type(t) => out.push_str(&type_to_string(t)),
+            syn::GenericArgument::Lifetime(l) => out.push_str(&l.ident.to_string()),
+            other => out.push_str(&quote::quote!(#other).to_string().replace(' ', "")),
+        }
+    }
+    out
+}
+
 fn last_type_ident(ty: &Type) -> Option<String> {
     if let Type::Path(p) = ty {
         return Some(p.path.segments.last()?.ident.to_string());
@@ -201,9 +268,13 @@ fn collect_chain(block: &syn::Block) -> Vec<(String, ChainKindTok)> {
             }
         }
         fn push_path(&mut self, p: &syn::Path, kind: ChainKindTok) {
-            if let Some(seg) = p.segments.last() {
-                self.push_unique(seg.ident.to_string(), kind);
-            }
+            let name = p
+                .segments
+                .iter()
+                .map(|s| s.ident.to_string())
+                .collect::<Vec<_>>()
+                .join("::");
+            self.push_unique(name, kind);
         }
     }
     impl<'ast> Visit<'ast> for V {
@@ -228,9 +299,13 @@ fn collect_chain(block: &syn::Block) -> Vec<(String, ChainKindTok)> {
             if last == "fork" {
                 if let Ok(args) = syn::parse2::<ForkArgs>(mac.tokens.clone()) {
                     for j in &args.arms {
-                        self.push_path(j, ChainKindTok::Fork);
+                        if let syn::Expr::Path(p) = j {
+                            self.push_path(&p.path, ChainKindTok::Fork);
+                        }
                     }
-                    self.push_path(&args.default, ChainKindTok::Fork);
+                    if let syn::Expr::Path(p) = &args.default {
+                        self.push_path(&p.path, ChainKindTok::Fork);
+                    }
                 }
             }
         }
@@ -241,8 +316,8 @@ fn collect_chain(block: &syn::Block) -> Vec<(String, ChainKindTok)> {
 }
 
 struct ForkArgs {
-    arms: Vec<syn::Path>,
-    default: syn::Path,
+    arms: Vec<syn::Expr>,
+    default: syn::Expr,
 }
 
 impl syn::parse::Parse for ForkArgs {
@@ -254,13 +329,13 @@ impl syn::parse::Parse for ForkArgs {
             if input.peek(syn::Token![_]) {
                 input.parse::<syn::Token![_]>()?;
                 input.parse::<syn::Token![=>]>()?;
-                let default: syn::Path = input.parse()?;
+                let default: syn::Expr = input.parse()?;
                 let _: Option<syn::Token![,]> = input.parse().ok();
                 return Ok(ForkArgs { arms, default });
             }
             let _pred: syn::Expr = input.parse()?;
             input.parse::<syn::Token![=>]>()?;
-            let jig: syn::Path = input.parse()?;
+            let jig: syn::Expr = input.parse()?;
             input.parse::<syn::Token![,]>()?;
             arms.push(jig);
         }

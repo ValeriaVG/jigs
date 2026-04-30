@@ -2,12 +2,12 @@
 
 ```mermaid
 flowchart TD
-  log_incoming["log_incoming<br/><i>req → req</i>"]
-  only_get{"only_get<br/><i>req → branch</i>"}
-  root{"root<br/><i>req → res</i>"}
-  hello{"hello<br/><i>req → res</i>"}
-  not_found{"not_found<br/><i>req → res</i>"}
-  log_outbound(["log_outbound<br/><i>res → res</i>"])
+  log_incoming["log_incoming<br/><i>HttpRequest → HttpRequest</i>"]
+  only_get{"only_get<br/><i>HttpRequest → Branch<HttpRequest,HttpResponse></i>"}
+  root{"root<br/><i>HttpRequest → HttpResponse</i>"}
+  hello{"hello<br/><i>HttpRequest → HttpResponse</i>"}
+  not_found{"not_found<br/><i>HttpRequest → HttpResponse</i>"}
+  log_outbound(["log_outbound<br/><i>HttpResponse → HttpResponse</i>"]])
 
 log_incoming --> only_get
 only_get --> route

@@ -6,6 +6,46 @@ use std::path::{Path, PathBuf};
 
 const TEMPLATE: &str = include_str!("template.html");
 
+type Index = BTreeMap<&'static str, Vec<&'static JigMeta>>;
+
+fn build_index() -> Index {
+    let mut map: Index = BTreeMap::new();
+    for m in jigs_core::all_jigs() {
+        map.entry(m.name).or_default().push(m);
+    }
+    map
+}
+
+fn resolve(name: &str, all: &Index) -> Option<&'static JigMeta> {
+    if let Some(v) = all.get(name) {
+        // When multiple jigs share the same short name, prefer the one
+        // with the shallowest module path (fewest segments). This makes
+        // the top-level pipeline entry win over feature-module handlers.
+        return v
+            .iter()
+            .min_by_key(|m| m.module.split("::").count())
+            .copied();
+    }
+    if let Some(pos) = name.rfind("::") {
+        let target_name = &name[pos + 2..];
+        let prefix = name[..pos].strip_prefix("crate::").unwrap_or(&name[..pos]);
+        if let Some(candidates) = all.get(target_name) {
+            for m in candidates {
+                if m.module.ends_with(prefix) || m.module.contains(&format!("::{}", prefix)) {
+                    return Some(m);
+                }
+            }
+            for m in candidates {
+                if m.file.contains(prefix) {
+                    return Some(m);
+                }
+            }
+            return candidates.first().copied();
+        }
+    }
+    None
+}
+
 /// Render the pipeline rooted at `entry` (or the alphabetically first jig if
 /// `None`) as a complete HTML document. `title` is shown in the page header
 /// and `<title>` tag.
@@ -23,8 +63,7 @@ const TEMPLATE: &str = include_str!("template.html");
 /// - TextMate: `txmt://open/?url=file://{path}&line={line}`
 /// - GitHub: `https://github.com/OWNER/REPO/blob/main/{rel_path}#L{line}`
 pub fn to_html(entry: Option<&str>, title: &str, editor: Option<&str>) -> String {
-    let all: BTreeMap<&'static str, &'static JigMeta> =
-        jigs_core::all_jigs().map(|m| (m.name, m)).collect();
+    let all = build_index();
     let entry = entry
         .map(str::to_string)
         .or_else(|| all.keys().next().map(|s| s.to_string()))
@@ -36,21 +75,18 @@ pub fn to_html(entry: Option<&str>, title: &str, editor: Option<&str>) -> String
         .replace("__DATA__", &data)
 }
 
-fn reachable(
-    all: &BTreeMap<&'static str, &'static JigMeta>,
-    entry: &str,
-) -> BTreeMap<String, &'static JigMeta> {
+fn reachable(all: &Index, entry: &str) -> BTreeMap<String, &'static JigMeta> {
     let mut out = BTreeMap::new();
     let mut stack = vec![entry.to_string()];
     while let Some(name) = stack.pop() {
         if out.contains_key(&name) {
             continue;
         }
-        if let Some(m) = all.get(name.as_str()) {
+        if let Some(m) = resolve(name.as_str(), all) {
             for c in m.chain {
                 stack.push(c.name.to_string());
             }
-            out.insert(name, *m);
+            out.insert(name, m);
         }
     }
     out
@@ -73,11 +109,11 @@ fn encode(
         None => s.push_str("null"),
     }
     s.push_str(",\"nodes\":{");
-    for (i, m) in visible.values().enumerate() {
+    for (i, (key, m)) in visible.iter().enumerate() {
         if i > 0 {
             s.push(',');
         }
-        push_json_str(&mut s, m.name);
+        push_json_str(&mut s, key);
         s.push_str(":{\"file\":");
         push_json_str(&mut s, m.file);
         s.push_str(",\"line\":");
@@ -86,12 +122,18 @@ fn encode(
         push_json_str(&mut s, m.kind);
         s.push_str(",\"input\":");
         push_json_str(&mut s, m.input);
+        s.push_str(",\"input_type\":");
+        push_json_str(&mut s, m.input_type);
+        s.push_str(",\"output_type\":");
+        push_json_str(&mut s, m.output_type);
         s.push_str(",\"async\":");
         s.push_str(if m.is_async { "true" } else { "false" });
         s.push_str(",\"file_abs\":");
         push_json_str(&mut s, &absolutize(m.file));
         s.push_str(",\"basename\":");
         push_json_str(&mut s, basename(m.file));
+        s.push_str(",\"module\":");
+        push_json_str(&mut s, m.module);
         s.push_str(",\"children\":[");
         for (j, c) in m.chain.iter().enumerate() {
             if j > 0 {
@@ -180,17 +222,21 @@ mod tests {
             line: 1,
             kind,
             input: "Request",
+            input_type: "",
+            output_type: "",
             is_async: false,
+            module: "crate",
             chain: leaked,
         }
     }
 
-    fn fake(items: Vec<JigMeta>) -> BTreeMap<&'static str, &'static JigMeta> {
-        let leaked: Vec<&'static JigMeta> = items
-            .into_iter()
-            .map(|m| Box::leak(Box::new(m)) as &'static _)
-            .collect();
-        leaked.into_iter().map(|m| (m.name, m)).collect()
+    fn fake(items: Vec<JigMeta>) -> Index {
+        let mut map: Index = BTreeMap::new();
+        for m in items {
+            let leaked: &'static JigMeta = Box::leak(Box::new(m));
+            map.entry(leaked.name).or_default().push(leaked);
+        }
+        map
     }
 
     #[test]

@@ -2,11 +2,11 @@
 
 ```mermaid
 flowchart TD
-  log_incoming["log_incoming<br/><i>req → req</i>"]
-  enrich["enrich<br/><i>async req → req</i>"]
-  require_account{"require_account<br/><i>req → branch</i>"}
-  render{"render<br/><i>req → res</i>"}
-  log_outbound(["log_outbound<br/><i>res → res</i>"])
+  log_incoming["log_incoming<br/><i>Ctx → Ctx</i>"]
+  enrich["enrich<br/><i>async Ctx → Ctx</i>"]
+  require_account{"require_account<br/><i>Ctx → Branch<Ctx,String></i>"}
+  render{"render<br/><i>Ctx → String</i>"}
+  log_outbound(["log_outbound<br/><i>String → String</i>"]])
 
 log_incoming --> enrich
 enrich --> require_account

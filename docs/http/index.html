@@ -364,7 +364,7 @@
     <span class="group"><kbd>Esc</kbd> back up</span>
     <span class="group"><kbd>Alt</kbd>+<kbd>←</kbd> / <kbd>→</kbd> history</span>
   </footer>
-  <script id="data" type="application/json">{"entry":"handle","title":"http example","editor":"https://github.com/ValeriaVG/jigs/blob/main/{rel_path}#L{line}","nodes":{"handle":{"file":"examples/http/src/main.rs","line":64,"kind":"Response","input":"Request","async":false,"file_abs":"/Users/valeria/git/jigs/examples/http/src/main.rs","basename":"main.rs","children":["log_incoming","only_get","route","log_outbound"],"child_kinds":["then","then","then","then"]},"hello":{"file":"examples/http/src/main.rs","line":33,"kind":"Response","input":"Request","async":false,"file_abs":"/Users/valeria/git/jigs/examples/http/src/main.rs","basename":"main.rs","children":[],"child_kinds":[]},"log_incoming":{"file":"examples/http/src/main.rs","line":7,"kind":"Request","input":"Request","async":false,"file_abs":"/Users/valeria/git/jigs/examples/http/src/main.rs","basename":"main.rs","children":[],"child_kinds":[]},"log_outbound":{"file":"examples/http/src/main.rs","line":56,"kind":"Response","input":"Response","async":false,"file_abs":"/Users/valeria/git/jigs/examples/http/src/main.rs","basename":"main.rs","children":[],"child_kinds":[]},"not_found":{"file":"examples/http/src/main.rs","line":42,"kind":"Response","input":"Request","async":false,"file_abs":"/Users/valeria/git/jigs/examples/http/src/main.rs","basename":"main.rs","children":[],"child_kinds":[]},"only_get":{"file":"examples/http/src/main.rs","line":13,"kind":"Branch","input":"Request","async":false,"file_abs":"/Users/valeria/git/jigs/examples/http/src/main.rs","basename":"main.rs","children":[],"child_kinds":[]},"root":{"file":"examples/http/src/main.rs","line":25,"kind":"Response","input":"Request","async":false,"file_abs":"/Users/valeria/git/jigs/examples/http/src/main.rs","basename":"main.rs","children":[],"child_kinds":[]},"route":{"file":"examples/http/src/main.rs","line":47,"kind":"Response","input":"Request","async":false,"file_abs":"/Users/valeria/git/jigs/examples/http/src/main.rs","basename":"main.rs","children":["root","hello","not_found"],"child_kinds":["fork","fork","fork"]}}}</script>
+  <script id="data" type="application/json">{"entry":"handle","title":"http example","editor":"https://github.com/ValeriaVG/jigs/blob/main/{rel_path}#L{line}","nodes":{"handle":{"file":"examples/http/src/main.rs","line":64,"kind":"Response","input":"Request","input_type":"HttpRequest","output_type":"HttpResponse","async":false,"file_abs":"/Users/valeria/git/jigs/examples/http/src/main.rs","basename":"main.rs","module":"jigs_example_http","children":["log_incoming","only_get","route","log_outbound"],"child_kinds":["then","then","then","then"]},"hello":{"file":"examples/http/src/main.rs","line":33,"kind":"Response","input":"Request","input_type":"HttpRequest","output_type":"HttpResponse","async":false,"file_abs":"/Users/valeria/git/jigs/examples/http/src/main.rs","basename":"main.rs","module":"jigs_example_http","children":[],"child_kinds":[]},"log_incoming":{"file":"examples/http/src/main.rs","line":7,"kind":"Request","input":"Request","input_type":"HttpRequest","output_type":"HttpRequest","async":false,"file_abs":"/Users/valeria/git/jigs/examples/http/src/main.rs","basename":"main.rs","module":"jigs_example_http","children":[],"child_kinds":[]},"log_outbound":{"file":"examples/http/src/main.rs","line":56,"kind":"Response","input":"Response","input_type":"HttpResponse","output_type":"HttpResponse","async":false,"file_abs":"/Users/valeria/git/jigs/examples/http/src/main.rs","basename":"main.rs","module":"jigs_example_http","children":[],"child_kinds":[]},"not_found":{"file":"examples/http/src/main.rs","line":42,"kind":"Response","input":"Request","input_type":"HttpRequest","output_type":"HttpResponse","async":false,"file_abs":"/Users/valeria/git/jigs/examples/http/src/main.rs","basename":"main.rs","module":"jigs_example_http","children":[],"child_kinds":[]},"only_get":{"file":"examples/http/src/main.rs","line":13,"kind":"Branch","input":"Request","input_type":"HttpRequest","output_type":"Branch\u003cHttpRequest,HttpResponse>","async":false,"file_abs":"/Users/valeria/git/jigs/examples/http/src/main.rs","basename":"main.rs","module":"jigs_example_http","children":[],"child_kinds":[]},"root":{"file":"examples/http/src/main.rs","line":25,"kind":"Response","input":"Request","input_type":"HttpRequest","output_type":"HttpResponse","async":false,"file_abs":"/Users/valeria/git/jigs/examples/http/src/main.rs","basename":"main.rs","module":"jigs_example_http","children":[],"child_kinds":[]},"route":{"file":"examples/http/src/main.rs","line":47,"kind":"Response","input":"Request","input_type":"HttpRequest","output_type":"HttpResponse","async":false,"file_abs":"/Users/valeria/git/jigs/examples/http/src/main.rs","basename":"main.rs","module":"jigs_example_http","children":["root","hello","not_found"],"child_kinds":["fork","fork","fork"]}}}</script>
   <script>
   (() => {
     const DATA = JSON.parse(document.getElementById('data').textContent);
@@ -460,7 +460,10 @@
         const composite = isComposite(name);
         const missing = !child;
         const sigLabel = child
-          ? (child.async ? 'async ' : '') + child.input + ' → ' + child.kind
+          ? (child.async ? 'async ' : '')
+            + (child.input_type || child.input)
+            + ' \u2192 '
+            + (child.output_type || child.kind)
           : 'external';
         const btn = el('button', {
           type: 'button',
@@ -530,7 +533,9 @@
         dl.appendChild(el('dd', {}, 'not registered'));
       } else {
         dl.appendChild(el('dt', {}, 'signature'));
-        const sig = (n.async ? 'async ' : '') + n.input + ' → ' + n.kind;
+        const inT = n.input_type || n.input;
+        const outT = n.output_type || n.kind;
+        const sig = (n.async ? 'async ' : '') + inT + ' \u2192 ' + outT;
         dl.appendChild(el('dd', {}, sig));
         dl.appendChild(el('dt', {}, 'file'));
         const fileDd = el('dd');

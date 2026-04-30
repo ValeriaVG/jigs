@@ -51,6 +51,21 @@ fn macro_records_return_kind() {
 }
 
 #[test]
+fn macro_records_payload_types() {
+    let validate = jigs::find_jig("validate").unwrap();
+    assert_eq!(validate.input_type, "u32");
+    assert_eq!(validate.output_type, "u32");
+
+    let guard = jigs::find_jig("guard").unwrap();
+    assert_eq!(guard.input_type, "u32");
+    assert_eq!(guard.output_type, "Branch<u32,String>");
+
+    let finalize = jigs::find_jig("finalize").unwrap();
+    assert_eq!(finalize.input_type, "u32");
+    assert_eq!(finalize.output_type, "String");
+}
+
+#[test]
 fn map_html_includes_registered_jigs() {
     let html = jigs::map::to_html(Some("entry"), "test pipeline", None);
     assert!(html.starts_with("<!doctype html>"));

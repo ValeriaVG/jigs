@@ -1,0 +1,10 @@
+[package]
+name = "jigs-example-events"
+version = "0.0.0"
+edition.workspace = true
+publish = false
+
+[dependencies]
+jigs = { path = "../../crates/jigs", features = ["trace"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"

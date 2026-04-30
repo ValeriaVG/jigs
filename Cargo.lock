@@ -150,6 +150,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "jigs-example-events"
+version = "0.0.0"
+dependencies = [
+ "jigs",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "jigs-example-hello"
 version = "0.0.0"
 dependencies = [

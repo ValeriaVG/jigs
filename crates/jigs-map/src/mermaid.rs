@@ -12,13 +12,51 @@ use jigs_core::{ChainKind, JigMeta};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fmt::Write;
 
-type Index = BTreeMap<&'static str, &'static JigMeta>;
+type Index = BTreeMap<&'static str, Vec<&'static JigMeta>>;
+
+fn build_index() -> Index {
+    let mut map: Index = BTreeMap::new();
+    for m in jigs_core::all_jigs() {
+        map.entry(m.name).or_default().push(m);
+    }
+    map
+}
+
+fn resolve(name: &str, all: &Index) -> Option<&'static JigMeta> {
+    if let Some(v) = all.get(name) {
+        // When multiple jigs share the same short name, prefer the one
+        // with the shallowest module path (fewest segments). This makes
+        // the top-level pipeline entry win over feature-module handlers.
+        return v
+            .iter()
+            .min_by_key(|m| m.module.split("::").count())
+            .copied();
+    }
+    if let Some(pos) = name.rfind("::") {
+        let target_name = &name[pos + 2..];
+        let prefix = name[..pos].strip_prefix("crate::").unwrap_or(&name[..pos]);
+        if let Some(candidates) = all.get(target_name) {
+            for m in candidates {
+                if m.module.ends_with(prefix) || m.module.contains(&format!("::{}", prefix)) {
+                    return Some(m);
+                }
+            }
+            for m in candidates {
+                if m.file.contains(prefix) {
+                    return Some(m);
+                }
+            }
+            return candidates.first().copied();
+        }
+    }
+    None
+}
 
 /// Render the pipeline rooted at `entry` (or the first registered jig if
 /// `None`) as a Mermaid `flowchart TD` document, without any surrounding
 /// markdown fence.
 pub fn to_mermaid(entry: Option<&str>) -> String {
-    let all: Index = jigs_core::all_jigs().map(|m| (m.name, m)).collect();
+    let all = build_index();
     let entry = entry
         .map(str::to_string)
         .or_else(|| all.keys().next().map(|s| s.to_string()))
@@ -97,13 +135,13 @@ fn walk_for_homes<'a>(
         return;
     }
     depths.insert(name, depth);
-    let Some(m) = all.get(name) else { return };
+    let Some(m) = resolve(name, all) else { return };
     if m.chain.is_empty() {
         return;
     }
     for c in m.chain {
         if c.kind == ChainKind::Fork {
-            let is_leaf = all.get(c.name).is_none_or(|cm| cm.chain.is_empty());
+            let is_leaf = resolve(c.name, all).is_none_or(|cm| cm.chain.is_empty());
             if is_leaf {
                 leaf_parents.entry(c.name).or_default().push(name);
             }
@@ -119,17 +157,19 @@ fn walk_for_homes<'a>(
 ///
 /// Externals or unrecognised pairs render as a flag/asymmetric shape `>..]`.
 fn node_visual(name: &str, all: &Index) -> (&'static str, &'static str, String) {
-    let Some(m) = all.get(name) else {
+    let Some(m) = resolve(name, all) else {
         return (">", "]", format!("{name}<br/><i>external</i>"));
     };
     let async_prefix = if m.is_async { "async " } else { "" };
+    let in_ty = m.input_type;
+    let out_ty = m.output_type;
     let (open, close, sig) = match (m.input, m.kind) {
-        ("Request", "Request") => ("[", "]", "req → req"),
-        ("Request", "Response") => ("{", "}", "req → res"),
-        ("Request", "Branch") => ("{", "}", "req → branch"),
-        ("Request", "Pending") => ("{", "}", "req → async"),
-        ("Response", "Response") => ("([", "])", "res → res"),
-        _ => ("[", "]", "?"),
+        ("Request", "Request") => ("[", "]", format!("{in_ty} → {out_ty}")),
+        ("Request", "Response") => ("{", "}", format!("{in_ty} → {out_ty}")),
+        ("Request", "Branch") => ("{", "}", format!("{in_ty} → {out_ty}")),
+        ("Request", "Pending") => ("{", "}", format!("{in_ty} → {out_ty}")),
+        ("Response", "Response") => ("([", "]])", format!("{in_ty} → {out_ty}")),
+        _ => ("[", "]", "?".into()),
     };
     (
         open,
@@ -140,17 +180,18 @@ fn node_visual(name: &str, all: &Index) -> (&'static str, &'static str, String) 
 
 /// Walk the pipeline and accumulate the names of every leaf (chain-less)
 /// jig that participates, so each can be declared exactly once.
-fn collect_leaves(name: &str, all: &Index, seen: &mut HashSet<String>, out: &mut Vec<String>) {
-    if !seen.insert(name.to_string()) {
+fn collect_leaves(name: &str, all: &Index, seen: &mut HashSet<usize>, out: &mut Vec<String>) {
+    let Some(m) = resolve(name, all) else { return };
+    let ptr = m as *const _ as usize;
+    if !seen.insert(ptr) {
         return;
     }
-    match all.get(name) {
-        Some(m) if !m.chain.is_empty() => {
-            for c in m.chain {
-                collect_leaves(c.name, all, seen, out);
-            }
-        }
-        _ => out.push(name.to_string()),
+    if m.chain.is_empty() {
+        out.push(m.name.to_string());
+        return;
+    }
+    for c in m.chain {
+        collect_leaves(c.name, all, seen, out);
     }
 }
 
@@ -159,15 +200,16 @@ fn emit(
     all: &Index,
     name: &str,
     homes: &HashMap<&str, &str>,
-    seen: &mut HashSet<String>,
+    seen: &mut HashSet<usize>,
     depth: usize,
     is_root: bool,
 ) {
-    if !seen.insert(name.to_string()) {
+    let Some(m) = resolve(name, all) else { return };
+    let ptr = m as *const _ as usize;
+    if m.chain.is_empty() {
         return;
     }
-    let Some(m) = all.get(name) else { return };
-    if m.chain.is_empty() {
+    if !seen.insert(ptr) {
         return;
     }
     let pad = "  ".repeat(depth);
@@ -190,7 +232,7 @@ fn emit(
         writeln!(out, "{edge_pad}{from} --> {to}").ok();
     }
     for c in m.chain {
-        match all.get(c.name) {
+        match resolve(c.name, all) {
             Some(cm) if !cm.chain.is_empty() => {
                 emit(out, all, c.name, homes, seen, depth + 1, false);
             }
@@ -198,7 +240,7 @@ fn emit(
             // shallowest dispatcher that references it as an arm. This
             // lets mermaid place shared leaves at their LCA rather
             // than capturing them in the first dispatcher visited.
-            _ if c.kind == ChainKind::Fork && homes.get(c.name).copied() == Some(name) => {
+            _ if c.kind == ChainKind::Fork && homes.get(c.name).copied() == Some(m.name) => {
                 writeln!(out, "{edge_pad}{}", c.name).ok();
             }
             _ => {}
@@ -213,7 +255,7 @@ fn first_leaf<'a>(name: &'a str, all: &'a Index, seen: &mut HashSet<&'a str>) ->
     if !seen.insert(name) {
         return name;
     }
-    match all.get(name) {
+    match resolve(name, all) {
         Some(m) if !m.chain.is_empty() => {
             // Fork dispatchers have no single "first" leaf — the first thing
             // the request meets is the dispatcher subgraph border. Stop here
@@ -232,7 +274,7 @@ fn last_leaf<'a>(name: &'a str, all: &'a Index, seen: &mut HashSet<&'a str>) -> 
     if !seen.insert(name) {
         return name;
     }
-    match all.get(name) {
+    match resolve(name, all) {
         Some(m) if !m.chain.is_empty() => {
             if is_fork_dispatcher(m) {
                 name
@@ -250,13 +292,12 @@ mod tests {
     use jigs_core::ChainStep;
 
     fn fake(items: Vec<JigMeta>) -> Index {
-        items
-            .into_iter()
-            .map(|m| {
-                let r: &'static JigMeta = Box::leak(Box::new(m));
-                (r.name, r)
-            })
-            .collect()
+        let mut map: Index = BTreeMap::new();
+        for m in items {
+            let r: &'static JigMeta = Box::leak(Box::new(m));
+            map.entry(r.name).or_default().push(r);
+        }
+        map
     }
 
     fn then_chain(names: &[&'static str]) -> &'static [ChainStep] {
@@ -282,11 +323,13 @@ mod tests {
     }
 
     fn meta(name: &'static str, kind: &'static str, chain: &[&'static str]) -> JigMeta {
-        meta_full(name, "Request", kind, false, then_chain(chain))
+        meta_full(name, "Request", "", "", kind, false, then_chain(chain))
     }
     fn meta_full(
         name: &'static str,
         input: &'static str,
+        input_type: &'static str,
+        output_type: &'static str,
         kind: &'static str,
         is_async: bool,
         chain: &'static [ChainStep],
@@ -297,7 +340,10 @@ mod tests {
             line: 1,
             kind,
             input,
+            input_type,
+            output_type,
             is_async,
+            module: "crate",
             chain,
         }
     }
@@ -345,13 +391,39 @@ mod tests {
             meta_full(
                 "root",
                 "Request",
+                "",
+                "",
                 "Response",
                 false,
                 then_chain(&["a", "b", "c"]),
             ),
-            meta_full("a", "Request", "Request", false, then_chain(&[])),
-            meta_full("b", "Request", "Branch", false, then_chain(&[])),
-            meta_full("c", "Response", "Response", false, then_chain(&[])),
+            meta_full(
+                "a",
+                "Request",
+                "req",
+                "req",
+                "Request",
+                false,
+                then_chain(&[]),
+            ),
+            meta_full(
+                "b",
+                "Request",
+                "req",
+                "branch",
+                "Branch",
+                false,
+                then_chain(&[]),
+            ),
+            meta_full(
+                "c",
+                "Response",
+                "res",
+                "res",
+                "Response",
+                false,
+                then_chain(&[]),
+            ),
         ]);
         let m = render(&all, "root");
         assert!(m.contains("a[\"a"), "Request→Request should be a rect: {m}");
@@ -368,8 +440,24 @@ mod tests {
     #[test]
     fn async_prefix_in_label() {
         let all = fake(vec![
-            meta_full("root", "Request", "Response", false, then_chain(&["a"])),
-            meta_full("a", "Request", "Request", true, then_chain(&[])),
+            meta_full(
+                "root",
+                "Request",
+                "",
+                "",
+                "Response",
+                false,
+                then_chain(&["a"]),
+            ),
+            meta_full(
+                "a",
+                "Request",
+                "req",
+                "req",
+                "Request",
+                true,
+                then_chain(&[]),
+            ),
         ]);
         let m = render(&all, "root");
         assert!(m.contains("async req → req"), "async marker missing: {m}");
@@ -382,6 +470,8 @@ mod tests {
             meta_full(
                 "router",
                 "Request",
+                "",
+                "",
                 "Response",
                 false,
                 fork_chain(&["a", "b"]),
@@ -406,6 +496,8 @@ mod tests {
             meta_full(
                 "outer",
                 "Request",
+                "",
+                "",
                 "Response",
                 false,
                 fork_chain(&["inner_a", "inner_b", "not_found"]),
@@ -413,6 +505,8 @@ mod tests {
             meta_full(
                 "inner_a",
                 "Request",
+                "",
+                "",
                 "Response",
                 false,
                 fork_chain(&["leaf_a", "not_found"]),
@@ -420,6 +514,8 @@ mod tests {
             meta_full(
                 "inner_b",
                 "Request",
+                "",
+                "",
                 "Response",
                 false,
                 fork_chain(&["leaf_b", "not_found"]),
@@ -456,6 +552,8 @@ mod tests {
             meta_full(
                 "router",
                 "Request",
+                "",
+                "",
                 "Response",
                 false,
                 fork_chain(&["a", "b", "c"]),

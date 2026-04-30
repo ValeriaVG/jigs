@@ -364,7 +364,7 @@
     <span class="group"><kbd>Esc</kbd> back up</span>
     <span class="group"><kbd>Alt</kbd>+<kbd>←</kbd> / <kbd>→</kbd> history</span>
   </footer>
-  <script id="data" type="application/json">{"entry":"handle","title":"hello example","editor":"https://github.com/ValeriaVG/jigs/blob/main/{rel_path}#L{line}","nodes":{"greet":{"file":"examples/hello/src/main.rs","line":17,"kind":"Response","input":"Request","async":false,"file_abs":"/Users/valeria/git/jigs/examples/hello/src/main.rs","basename":"main.rs","children":[],"child_kinds":[]},"handle":{"file":"examples/hello/src/main.rs","line":39,"kind":"Response","input":"Request","async":false,"file_abs":"/Users/valeria/git/jigs/examples/hello/src/main.rs","basename":"main.rs","children":["log_incoming","validate_incoming","greet","shout","log_outbound"],"child_kinds":["then","then","then","then","then"]},"log_incoming":{"file":"examples/hello/src/main.rs","line":3,"kind":"Request","input":"Request","async":false,"file_abs":"/Users/valeria/git/jigs/examples/hello/src/main.rs","basename":"main.rs","children":[],"child_kinds":[]},"log_outbound":{"file":"examples/hello/src/main.rs","line":30,"kind":"Response","input":"Response","async":false,"file_abs":"/Users/valeria/git/jigs/examples/hello/src/main.rs","basename":"main.rs","children":[],"child_kinds":[]},"shout":{"file":"examples/hello/src/main.rs","line":22,"kind":"Response","input":"Response","async":false,"file_abs":"/Users/valeria/git/jigs/examples/hello/src/main.rs","basename":"main.rs","children":[],"child_kinds":[]},"validate_incoming":{"file":"examples/hello/src/main.rs","line":9,"kind":"Branch","input":"Request","async":false,"file_abs":"/Users/valeria/git/jigs/examples/hello/src/main.rs","basename":"main.rs","children":[],"child_kinds":[]}}}</script>
+  <script id="data" type="application/json">{"entry":"handle","title":"hello example","editor":"https://github.com/ValeriaVG/jigs/blob/main/{rel_path}#L{line}","nodes":{"greet":{"file":"examples/hello/src/main.rs","line":17,"kind":"Response","input":"Request","input_type":"String","output_type":"String","async":false,"file_abs":"/Users/valeria/git/jigs/examples/hello/src/main.rs","basename":"main.rs","module":"jigs_example_hello","children":[],"child_kinds":[]},"handle":{"file":"examples/hello/src/main.rs","line":39,"kind":"Response","input":"Request","input_type":"String","output_type":"String","async":false,"file_abs":"/Users/valeria/git/jigs/examples/hello/src/main.rs","basename":"main.rs","module":"jigs_example_hello","children":["log_incoming","validate_incoming","greet","shout","log_outbound"],"child_kinds":["then","then","then","then","then"]},"log_incoming":{"file":"examples/hello/src/main.rs","line":3,"kind":"Request","input":"Request","input_type":"String","output_type":"String","async":false,"file_abs":"/Users/valeria/git/jigs/examples/hello/src/main.rs","basename":"main.rs","module":"jigs_example_hello","children":[],"child_kinds":[]},"log_outbound":{"file":"examples/hello/src/main.rs","line":30,"kind":"Response","input":"Response","input_type":"String","output_type":"String","async":false,"file_abs":"/Users/valeria/git/jigs/examples/hello/src/main.rs","basename":"main.rs","module":"jigs_example_hello","children":[],"child_kinds":[]},"shout":{"file":"examples/hello/src/main.rs","line":22,"kind":"Response","input":"Response","input_type":"String","output_type":"String","async":false,"file_abs":"/Users/valeria/git/jigs/examples/hello/src/main.rs","basename":"main.rs","module":"jigs_example_hello","children":[],"child_kinds":[]},"validate_incoming":{"file":"examples/hello/src/main.rs","line":9,"kind":"Branch","input":"Request","input_type":"String","output_type":"Branch\u003cString,String>","async":false,"file_abs":"/Users/valeria/git/jigs/examples/hello/src/main.rs","basename":"main.rs","module":"jigs_example_hello","children":[],"child_kinds":[]}}}</script>
   <script>
   (() => {
     const DATA = JSON.parse(document.getElementById('data').textContent);
@@ -460,7 +460,10 @@
         const composite = isComposite(name);
         const missing = !child;
         const sigLabel = child
-          ? (child.async ? 'async ' : '') + child.input + ' → ' + child.kind
+          ? (child.async ? 'async ' : '')
+            + (child.input_type || child.input)
+            + ' \u2192 '
+            + (child.output_type || child.kind)
           : 'external';
         const btn = el('button', {
           type: 'button',
@@ -530,7 +533,9 @@
         dl.appendChild(el('dd', {}, 'not registered'));
       } else {
         dl.appendChild(el('dt', {}, 'signature'));
-        const sig = (n.async ? 'async ' : '') + n.input + ' → ' + n.kind;
+        const inT = n.input_type || n.input;
+        const outT = n.output_type || n.kind;
+        const sig = (n.async ? 'async ' : '') + inT + ' \u2192 ' + outT;
         dl.appendChild(el('dd', {}, sig));
         dl.appendChild(el('dt', {}, 'file'));
         const fileDd = el('dd');

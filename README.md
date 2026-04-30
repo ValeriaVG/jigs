@@ -71,7 +71,7 @@ There are four kinds of jigs, distinguished by their input and output types:
 
 The type system enforces ordering: once you hold a `Response`, you cannot chain a jig that expects a `Request`. Errored responses and `Branch::Done` short-circuit the rest of the pipeline.
 
-See [`examples/`](./examples) for sync, async, HTTP, and a multithreaded [todo API](./examples/todo-api) that demonstrates fork-based routing at multiple nesting depths.
+See [`examples/`](./examples) for sync, async, HTTP, event listeners, and a multithreaded [todo API](./examples/todo-api) that demonstrates fork-based routing at multiple nesting depths.
 
 For multi-arm dispatch use `fork!`. First matching predicate wins, `_` is the default:
 

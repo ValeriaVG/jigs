@@ -42,8 +42,14 @@ pub struct JigMeta {
     /// semantic buckets: request-side (Request → Request), switching
     /// (Request → Response/Branch) or response-side (Response → Response).
     pub input: &'static str,
+    /// Exact payload type coming in (e.g. `"Raw"`, `"u32"`, `"Response<HttpResponse>"`).
+    pub input_type: &'static str,
+    /// Exact payload type going out (e.g. `"HttpResponse"`, `"String"`, `"Branch<Ctx,OrderResult>"`).
+    pub output_type: &'static str,
     /// `true` if the underlying function is `async fn`.
     pub is_async: bool,
+    /// Rust module path of the function (e.g. `crate::features::orders`).
+    pub module: &'static str,
     /// Jigs this function references, in source order, tagged with how
     /// they were composed (`.then(...)` vs `fork!(...)` arm).
     pub chain: &'static [ChainStep],
