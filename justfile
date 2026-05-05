@@ -54,6 +54,7 @@ bump level:
     perl -i -pe "s/version = \"=$current\"/version = \"=$new\"/g" Cargo.toml
     cargo update --workspace >/dev/null
     echo "bumped to $new"
+    git tag "$new"
 
 # Publish a single crate. Usage: just release jigs-core
 release crate:
