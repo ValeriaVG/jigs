@@ -19,7 +19,6 @@ fn handle(request: Request) -> Response {
         .then(route_to_feature)
         .then(log_response)
 }
-jigs!(handle)
 ```
 
 Every step is a `jig` too, so you can compose processing pipelines of virtually any size.
@@ -54,6 +53,8 @@ fn validate(r: Request<u32>) -> Request<u32> { r }
 fn handle(r: Request<u32>) -> Response<String> {
     Response::ok(format!("got {}", r.0))
 }
+
+jigs!(handle)
 
 fn main() {
     let response = Request(42u32).then(validate).then(handle);
