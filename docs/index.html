@@ -4,74 +4,105 @@
 <meta charset="utf-8">
 <title>jigs</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="A small Rust framework for explicit request-to-response pipelines. Compile-time graph, optional runtime trace.">
+<meta name="description" content="Explicit request-to-response pipelines for Rust. Compile-time graph, interactive map, zero-cost abstraction.">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.min.css">
 <style>
   :root {
-    --bg: #fdfcf9;
-    --fg: #1a1a1a;
-    --muted: #6b6b6b;
-    --line: #e2dfd8;
-    --code-bg: #f3f0e9;
-    --link: #8b3a1e;
+    --bg: #fafaf9;
+    --canvas: #f5f5f4;
+    --fg: #1c1917;
+    --muted: #78716c;
+    --line: #e7e5e4;
+    --code-bg: #2b2b2b;
+    --card: #ffffff;
+    --accent: #4338ca;
+    --accent-light: #eef2ff;
+    --radius: 8px;
     color-scheme: light;
   }
   @media (prefers-color-scheme: dark) {
     :root {
-      --bg: #161513;
-      --fg: #e8e4dc;
-      --muted: #9a958c;
-      --line: #2c2a26;
-      --code-bg: #201e1b;
-      --link: #d98a5f;
+      --bg: #0c0a09;
+      --canvas: #1c1917;
+      --fg: #f5f5f4;
+      --muted: #a8a29e;
+      --line: #292524;
+      --code-bg: #1a1a1a;
+      --card: #1c1917;
+      --accent: #a78bfa;
+      --accent-light: #1e1b4b;
       color-scheme: dark;
     }
   }
-  * { box-sizing: border-box; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { overflow-x: hidden; }
   body {
-    margin: 0;
-    font: 16px/1.6 Charter, "Iowan Old Style", Georgia, "Times New Roman", serif;
+    font: 16px/1.7 Charter, "Iowan Old Style", Georgia, serif;
     color: var(--fg);
     background: var(--bg);
     -webkit-font-smoothing: antialiased;
   }
-  a { color: var(--link); text-decoration: underline; text-underline-offset: 2px; text-decoration-thickness: 1px; }
-  a:hover { text-decoration-thickness: 2px; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
 
-  main {
-    max-width: 680px;
+  .topbar {
+    max-width: 960px;
     margin: 0 auto;
-    padding: 48px 24px 64px;
-  }
-
-  header {
-    margin-bottom: 32px;
-  }
-  .topline {
+    padding: 28px 24px 0;
     display: flex;
-    align-items: center;
     justify-content: space-between;
-    gap: 12px;
-    margin: 0 0 6px;
+    align-items: center;
   }
-  header .name {
+  .topbar .name {
     font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-    font-size: 14px;
-    color: var(--muted);
-    margin: 0;
+    font-size: 15px;
+    font-weight: 700;
   }
-  header .name a { color: var(--muted); text-decoration: none; }
-  header .name a:hover { color: var(--fg); }
-  .toplinks {
+  .topbar .name a { color: var(--fg); text-decoration: none; }
+  .topbar .links {
     display: flex;
-    gap: 14px;
+    gap: 16px;
     font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
     font-size: 13px;
   }
-  .toplinks a {
+  .topbar .links a { color: var(--muted); }
+  .topbar .links a:hover { color: var(--fg); }
+
+  .layout {
+    max-width: 960px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: 1fr 180px;
+    gap: 0 48px;
+    padding: 0 24px;
+  }
+  @media (max-width: 800px) {
+    .layout { grid-template-columns: 1fr; }
+    .toc { display: none; }
+  }
+
+  article {
+    min-width: 0;
+    padding: 48px 0 0;
+  }
+
+  .toc {
+    position: sticky;
+    top: 32px;
+    align-self: start;
+    padding: 48px 0 32px;
+    font-size: 13.5px;
+    line-height: 1.8;
+  }
+  .toc nav { display: flex; flex-direction: column; }
+  .toc a {
     color: var(--muted);
     text-decoration: none;
+    padding: 2px 0;
+    transition: color .15s;
   }
-  .toplinks a:hover { color: var(--fg); }
+  .toc a:hover { color: var(--fg); }
+  .toc a.active { color: var(--accent); font-weight: 600; }
 
   h1 {
     font-size: 30px;
@@ -83,15 +114,18 @@
   h2 {
     font-size: 19px;
     font-weight: 600;
-    margin: 40px 0 12px;
+    margin: 56px 0 12px;
     letter-spacing: -0.005em;
+    scroll-margin-top: 24px;
   }
+  h2:first-of-type { margin-top: 0; }
   h3 {
     font-size: 16px;
     font-weight: 600;
-    margin: 24px 0 8px;
+    margin: 32px 0 8px;
+    scroll-margin-top: 24px;
   }
-  p { margin: 0 0 14px; }
+  p { margin: 0 0 16px; }
 
   .warn {
     font-size: 14px;
@@ -100,80 +134,129 @@
     padding: 2px 0 2px 14px;
     margin: 0 0 24px;
   }
-  .warn strong { color: var(--fg); font-weight: 600; }
 
   pre {
     background: var(--code-bg);
-    padding: 12px 14px;
-    border-radius: 3px;
+    padding: 14px 16px;
+    border-radius: var(--radius);
     overflow-x: auto;
-    margin: 0 0 16px;
+    margin: 0 0 20px;
     font: 13.5px/1.55 ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   }
   code {
     font: 0.88em ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-    background: var(--code-bg);
-    padding: 1px 4px;
-    border-radius: 2px;
+  }
+  :not(pre) > code {
+    background: var(--canvas);
+    padding: 1px 5px;
+    border-radius: 3px;
+    border: 1px solid var(--line);
   }
   pre code { background: transparent; padding: 0; }
 
-  ul.examples {
+  .trace-demo {
+    background: var(--canvas);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 16px 20px;
+    margin: 0 0 20px;
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 13px;
+    line-height: 1.65;
+    overflow-x: auto;
+  }
+  .trace-demo .ok { color: #15803d; }
+  .trace-demo .err { color: #dc2626; }
+  @media (prefers-color-scheme: dark) {
+    .trace-demo .ok { color: #4ade80; }
+  }
+
+  .map-viewer {
+    margin: 0 0 20px;
+  }
+  .map-tabs {
+    display: flex;
+    gap: 0;
+    margin-bottom: -1px;
+  }
+  .map-tab {
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 13px;
+    padding: 8px 16px;
+    border: 1px solid var(--line);
+    border-bottom: none;
+    border-radius: var(--radius) var(--radius) 0 0;
+    background: var(--canvas);
+    color: var(--muted);
+    cursor: pointer;
+    position: relative;
+    transition: background .1s, color .1s;
+  }
+  .map-tab:hover { color: var(--fg); }
+  .map-tab.active {
+    background: var(--card);
+    color: var(--fg);
+    z-index: 1;
+  }
+  .map-frame-wrap {
+    border: 1px solid var(--line);
+    border-radius: 0 0 var(--radius) var(--radius);
+    overflow: hidden;
+  }
+  .map-frame-wrap iframe {
+    width: 100%;
+    height: 480px;
+    border: none;
+    display: block;
+    background: var(--canvas);
+  }
+  .map-frame-wrap .map-full-link {
+    display: block;
+    padding: 8px 16px;
+    border-top: 1px solid var(--line);
+    font-size: 13px;
+    color: var(--muted);
+    text-align: right;
+  }
+  .map-frame-wrap .map-full-link:hover { color: var(--fg); }
+
+  .examples {
     list-style: none;
     padding: 0;
-    margin: 0 0 16px;
+    margin: 0 0 20px;
   }
-  ul.examples li {
+  .examples li {
     padding: 10px 0;
     border-bottom: 1px solid var(--line);
     display: flex;
     align-items: baseline;
     gap: 12px;
   }
-  ul.examples li:last-child { border-bottom: 0; }
-  ul.examples .ex-name {
+  .examples li:last-child { border-bottom: 0; }
+  .examples .ex-name {
     font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
     font-size: 14px;
-    min-width: 90px;
+    min-width: 80px;
   }
-  ul.examples .ex-name a { color: var(--fg); }
-  ul.examples .ex-desc {
+  .examples .ex-name a { color: var(--fg); }
+  .examples .ex-desc {
     color: var(--muted);
-    font-size: 14.5px;
+    font-size: 14px;
     flex: 1;
   }
-  ul.examples .ex-src {
+  .examples .ex-src {
     font-size: 13px;
-    color: var(--muted);
   }
-
-  table {
-    width: 100%;
-    border-collapse: collapse;
-    margin: 0 0 16px;
-    font-size: 14.5px;
-  }
-  th, td {
-    text-align: left;
-    padding: 6px 10px 6px 0;
-    border-bottom: 1px solid var(--line);
-  }
-  th {
-    font-weight: 600;
-    color: var(--muted);
-  }
+  .examples .ex-src a { color: var(--muted); }
 
   ul.roadmap {
     list-style: none;
     padding: 0;
     margin: 0 0 14px;
-    font-size: 15px;
-  }
-  ul.roadmap li {
-    padding: 3px 0;
     font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
     font-size: 13.5px;
   }
+  ul.roadmap li { padding: 3px 0; }
   ul.roadmap .done { color: var(--muted); }
   ul.roadmap .done::before { content: "[x] "; }
   ul.roadmap .open::before { content: "[ ] "; }
@@ -181,37 +264,38 @@
   footer {
     margin-top: 56px;
     padding-top: 16px;
+    padding-bottom: 32px;
     border-top: 1px solid var(--line);
     color: var(--muted);
     font-size: 13.5px;
+    grid-column: 1 / -1;
   }
   footer a { color: var(--muted); }
 </style>
 </head>
 <body>
-<main>
 
-<header>
-  <div class="topline">
-    <p class="name"><a href="./">jigs</a></p>
-    <nav class="toplinks">
-      <a href="https://crates.io/crates/jigs" target="_blank" rel="noopener">crates.io</a>
-      <a href="https://docs.rs/jigs" target="_blank" rel="noopener">docs.rs</a>
-      <a href="https://github.com/ValeriaVG/jigs" target="_blank" rel="noopener">github</a>
-    </nav>
-  </div>
-  <h1>Explicit request-to-response pipelines for Rust.</h1>
-</header>
+<div class="topbar">
+  <p class="name"><a href="./">jigs</a></p>
+  <nav class="links">
+    <a href="https://crates.io/crates/jigs" target="_blank" rel="noopener">crates.io</a>
+    <a href="https://docs.rs/jigs" target="_blank" rel="noopener">docs.rs</a>
+    <a href="https://github.com/ValeriaVG/jigs" target="_blank" rel="noopener">github</a>
+  </nav>
+</div>
 
-<p class="warn"><strong>Heads up.</strong> This is an exploratory project. APIs will change, things will break, ideas will get thrown out. Play with it, don't ship it.</p>
+<div class="layout">
+  <article>
 
-<p>HTTP handlers, RPC services, agent workflows, data pipelines, event listeners: they all have the same shape. Something comes in, a handful of steps run, something goes out. The more steps there are, the harder the code gets to follow.</p>
+    <h1>Pipelines you can see through</h1>
 
-<p>A jig is the tool a machinist clamps a workpiece into so the cutting tool always lands in the same place. <code>jigs</code> is the same idea for code: each step is named, typed, and held in a known position relative to the others.</p>
+    <p class="warn"><strong>Heads up.</strong> Exploratory project. APIs will change. Play with it, don't ship it.</p>
 
-<p><code>jigs</code> lets you spell those steps out:</p>
+    <p>HTTP handlers, RPC services, agent workflows, data pipelines: they all have the same shape. Something comes in, steps run, something goes out. The more steps, the harder it gets to follow what happens where.</p>
 
-<pre><code>#[jig]
+    <p><code>jigs</code> makes each step a named, typed function held in a known position. You can read the pipeline top to bottom. The type system prevents invalid chains. And the whole graph is known at compile time, so you get an interactive map without running a build script.</p>
+
+    <pre><code class="language-rust">#[jig]
 fn handle(request: Request) -&gt; Response {
     request
         .then(log_incoming)
@@ -219,63 +303,78 @@ fn handle(request: Request) -&gt; Response {
         .then(route_to_feature)
         .then(log_response)
 }
+
 jigs!(handle);</code></pre>
 
-<p>Each step is itself a jig, so pipelines compose. Every <code>#[jig]</code> gets a compile-time marker type that implements <code>JigDef</code>. The <code>jigs!(entry_fn)</code> macro walks the trait recursively and produces <code>all_jigs()</code> / <code>find_jig()</code>, which means the whole graph is known at compile time and you can render it without scanning sources or running a build script.</p>
+    <h2 id="examples">Examples</h2>
 
-<h2 id="examples">Examples</h2>
-<p>Each link below opens the actual interactive map generated from the example crate. Nodes link back to source.</p>
+    <div class="map-viewer">
+      <div class="map-tabs" id="map-tabs">
+        <button class="map-tab active" data-src="hello/">hello</button>
+        <button class="map-tab" data-src="http/">http</button>
+        <button class="map-tab" data-src="async/">async</button>
+        <button class="map-tab" data-src="todo-api/">todo-api</button>
+        <button class="map-tab" data-src="checkout/">checkout</button>
+      </div>
+      <div class="map-frame-wrap">
+        <iframe id="map-iframe" src="hello/" loading="lazy"></iframe>
+        <a id="map-full-link" class="map-full-link" href="hello/" target="_blank" rel="noopener">Open full screen</a>
+      </div>
+    </div>
 
-<ul class="examples">
-  <li>
-    <span class="ex-name"><a href="hello/" target="_blank" rel="noopener">hello</a></span>
-    <span class="ex-desc">Smallest possible pipeline.</span>
-    <span class="ex-src"><a href="https://github.com/ValeriaVG/jigs/tree/main/examples/hello" target="_blank" rel="noopener">src</a></span>
-  </li>
-  <li>
-    <span class="ex-name"><a href="http/" target="_blank" rel="noopener">http</a></span>
-    <span class="ex-desc">A small HTTP server wired through jigs.</span>
-    <span class="ex-src"><a href="https://github.com/ValeriaVG/jigs/tree/main/examples/http" target="_blank" rel="noopener">src</a></span>
-  </li>
-  <li>
-    <span class="ex-name"><a href="async/" target="_blank" rel="noopener">async</a></span>
-    <span class="ex-desc">Async pipeline on tokio.</span>
-    <span class="ex-src"><a href="https://github.com/ValeriaVG/jigs/tree/main/examples/async" target="_blank" rel="noopener">src</a></span>
-  </li>
-  <li>
-    <span class="ex-name"><a href="events/" target="_blank" rel="noopener">events</a></span>
-    <span class="ex-desc">Async event listener pipeline.</span>
-    <span class="ex-src"><a href="https://github.com/ValeriaVG/jigs/tree/main/examples/events" target="_blank" rel="noopener">src</a></span>
-  </li>
-  <li>
-    <span class="ex-name"><a href="checkout/" target="_blank" rel="noopener">checkout</a></span>
-    <span class="ex-desc">Nested feature jigs in a checkout flow.</span>
-    <span class="ex-src"><a href="https://github.com/ValeriaVG/jigs/tree/main/examples/checkout" target="_blank" rel="noopener">src</a></span>
-  </li>
-  <li>
-    <span class="ex-name"><a href="cf-rag/" target="_blank" rel="noopener">cf-rag</a></span>
-    <span class="ex-desc">Sketch of a retrieval-augmented generation pipeline.</span>
-    <span class="ex-src"><a href="https://github.com/ValeriaVG/jigs/tree/main/examples/cf-rag" target="_blank" rel="noopener">src</a></span>
-  </li>
-  <li>
-    <span class="ex-name"><a href="todo-api/" target="_blank" rel="noopener">todo-api</a></span>
-    <span class="ex-desc">Multithreaded todo API with <code>fork!</code>-based routing at multiple nesting depths.</span>
-    <span class="ex-src"><a href="https://github.com/ValeriaVG/jigs/tree/main/examples/todo-api" target="_blank" rel="noopener">src</a></span>
-  </li>
-  <li>
-    <span class="ex-name"><a href="library/" target="_blank" rel="noopener">library</a></span>
-    <span class="ex-desc">Pipeline in a <code>staticlib</code>/<code>cdylib</code> crate with a C API.</span>
-    <span class="ex-src"><a href="https://github.com/ValeriaVG/jigs/tree/main/examples/library" target="_blank" rel="noopener">src</a></span>
-  </li>
-</ul>
+    <ul class="examples">
+      <li>
+        <span class="ex-name"><a href="hello/">hello</a></span>
+        <span class="ex-desc">Smallest possible pipeline</span>
+        <span class="ex-src"><a href="https://github.com/ValeriaVG/jigs/tree/main/examples/hello" target="_blank" rel="noopener">src</a></span>
+      </li>
+      <li>
+        <span class="ex-name"><a href="http/">http</a></span>
+        <span class="ex-desc">Small HTTP server through jigs</span>
+        <span class="ex-src"><a href="https://github.com/ValeriaVG/jigs/tree/main/examples/http" target="_blank" rel="noopener">src</a></span>
+      </li>
+      <li>
+        <span class="ex-name"><a href="async/">async</a></span>
+        <span class="ex-desc">Async pipeline on tokio</span>
+        <span class="ex-src"><a href="https://github.com/ValeriaVG/jigs/tree/main/examples/async" target="_blank" rel="noopener">src</a></span>
+      </li>
+      <li>
+        <span class="ex-name"><a href="events/">events</a></span>
+        <span class="ex-desc">Async event listener pipeline</span>
+        <span class="ex-src"><a href="https://github.com/ValeriaVG/jigs/tree/main/examples/events" target="_blank" rel="noopener">src</a></span>
+      </li>
+      <li>
+        <span class="ex-name"><a href="checkout/">checkout</a></span>
+        <span class="ex-desc">Nested feature jigs in a checkout flow</span>
+        <span class="ex-src"><a href="https://github.com/ValeriaVG/jigs/tree/main/examples/checkout" target="_blank" rel="noopener">src</a></span>
+      </li>
+      <li>
+        <span class="ex-name"><a href="cf-rag/">cf-rag</a></span>
+        <span class="ex-desc">RAG pipeline on Cloudflare Workers</span>
+        <span class="ex-src"><a href="https://github.com/ValeriaVG/jigs/tree/main/examples/cf-rag" target="_blank" rel="noopener">src</a></span>
+      </li>
+      <li>
+        <span class="ex-name"><a href="todo-api/">todo-api</a></span>
+        <span class="ex-desc">Multi-depth <code>fork!</code> routing</span>
+        <span class="ex-src"><a href="https://github.com/ValeriaVG/jigs/tree/main/examples/todo-api" target="_blank" rel="noopener">src</a></span>
+      </li>
+      <li>
+        <span class="ex-name"><a href="library/">library</a></span>
+        <span class="ex-desc">Pipeline in a cdylib with a C API</span>
+        <span class="ex-src"><a href="https://github.com/ValeriaVG/jigs/tree/main/examples/library" target="_blank" rel="noopener">src</a></span>
+      </li>
+    </ul>
 
-<h2 id="install">Install</h2>
-<pre><code>cargo add jigs</code></pre>
-<p>For per-step timing, turn on the <code>trace</code> feature:</p>
-<pre><code>cargo add jigs --features trace</code></pre>
+    <h2 id="quickstart">Quickstart</h2>
 
-<h2 id="quickstart">Quickstart</h2>
-<pre><code>use jigs::{jig, Request, Response};
+    <h3>Install</h3>
+    <pre><code class="language-bash">cargo add jigs</code></pre>
+    <p>For per-step timing: <code>cargo add jigs --features trace</code></p>
+
+    <h3>Write a pipeline</h3>
+    <p>Every jig is a plain function. The type system enforces ordering: once you hold a <code>Response</code>, you can't chain a jig that expects a <code>Request</code>. Errored responses and <code>Branch::Done</code> short-circuit the rest.</p>
+
+    <pre><code class="language-rust">use jigs::{jig, Request, Response};
 
 #[jig]
 fn validate(r: Request&lt;u32&gt;) -&gt; Request&lt;u32&gt; { r }
@@ -286,51 +385,36 @@ fn handle(r: Request&lt;u32&gt;) -&gt; Response&lt;String&gt; {
 }
 
 fn main() {
-    let response = Request(42u32).then(validate).then(handle);
+    let response = Request(42u32)
+        .then(validate)
+        .then(handle);
     assert_eq!(response.inner.unwrap(), "got 42");
 }</code></pre>
 
-<p>There are four shapes of jig:</p>
+    <h3>Route with <code>fork!</code></h3>
+    <p>First matching predicate wins. <code>_</code> is the default:</p>
 
-<table>
-  <thead>
-    <tr><th>Input</th><th>Output</th><th>Use</th></tr>
-  </thead>
-  <tbody>
-    <tr><td><code>Request</code></td><td><code>Request</code></td><td>enrich, validate, transform</td></tr>
-    <tr><td><code>Request</code></td><td><code>Response</code></td><td>terminal handler</td></tr>
-    <tr><td><code>Response</code></td><td><code>Response</code></td><td>post-process the outgoing message</td></tr>
-    <tr><td><code>Request</code></td><td><code>Branch&lt;Req,Resp&gt;</code></td><td>guard that may short-circuit</td></tr>
-  </tbody>
-</table>
-
-<p>The type system enforces ordering: once you hold a <code>Response</code>, you can't chain a jig that expects a <code>Request</code>. Errored responses and <code>Branch::Done</code> short-circuit the rest.</p>
-
-<p>For multi-arm dispatch use <code>fork!</code>. First matching predicate wins, <code>_</code> is the default:</p>
-
-<pre><code>#[jig]
+    <pre><code class="language-rust">#[jig]
 fn route(req: Request&lt;HttpRequest&gt;) -&gt; Response&lt;String&gt; {
     fork!(req,
         |r: &amp;HttpRequest| r.path == "/"                  =&gt; root,
         |r: &amp;HttpRequest| r.path.starts_with("/hello/")  =&gt; hello,
-        _ =&gt; not_found,
+        _                                                =&gt; not_found,
     )
 }</code></pre>
 
-<p>When a <code>#[jig]</code> function calls a jig from another module, use the module-qualified path (<code>features::auth::authenticate</code>) instead of importing the function directly. Same-module jigs can be referenced by name.</p>
+    <h3>Generate a map</h3>
+    <p>Each <code>#[jig]</code> gets a marker struct that implements <code>JigDef</code>. The <code>jigs!(entry_fn)</code> macro walks the trait recursively and produces <code>all_jigs()</code> / <code>find_jig()</code>. Place it in the same module as the entry function:</p>
 
-<h2 id="map">Generate a map</h2>
-<p>Each <code>#[jig]</code> gets a compile-time marker type that implements <code>JigDef</code>. The <code>jigs!(entry_fn)</code> macro — placed in the same module as the entry function — walks the trait recursively and produces <code>all_jigs()</code> / <code>find_jig()</code>. Render an HTML map or a Mermaid-flavored Markdown one straight from your code:</p>
-
-<pre><code>// pipeline.rs — same module as the entry function
+    <pre><code class="language-rust">// pipeline.rs
 use jigs::{jig, Request, Response};
 
 #[jig]
 fn handle(r: Request&lt;u32&gt;) -&gt; Response&lt;String&gt; { /* ... */ }
 
-jigs!(handle);  // generates all_jigs() and find_jig() here</code></pre>
+jigs!(handle);  // generates all_jigs() and find_jig()</code></pre>
 
-<pre><code>// main.rs
+    <pre><code class="language-rust">// main.rs
 use my_crate::pipeline::{all_jigs, handle};
 
 let dir = env!("CARGO_MANIFEST_DIR");
@@ -343,49 +427,120 @@ std::fs::write(
     jigs::map::to_markdown(all_jigs(), Some("handle"), "my service"),
 )?;</code></pre>
 
-<p>The third argument to <code>to_html</code> is an editor URL template. Use <code>{path}</code> for the absolute file path (local IDE handlers) or <code>{rel_path}</code> for the path relative to the workspace root (repo URLs); both also support <code>{line}</code>. Examples: <code>Some("vscode://file/{path}:{line}")</code> for VS Code or Cursor, <code>idea://open?file={path}&amp;line={line}</code> for JetBrains, or <code>https://github.com/OWNER/REPO/blob/main/{rel_path}#L{line}</code> to link back to the repo.</p>
+    <p>Every node in the map links to its source. The fourth argument to <code>to_html</code> is an editor URL template: <code>Some("vscode://file/{path}:{line}")</code> for VS Code, <code>Some("idea://open?file={path}&amp;line={line}")</code> for JetBrains, or <code>Some("https://github.com/OWNER/REPO/blob/main/{rel_path}#L{line}")</code> for GitHub.</p>
 
-<h2 id="trace">Trace at runtime</h2>
-<p>With the <code>trace</code> feature on, every step records its timing. Drain the per-thread buffer and render it in either format:</p>
+    <h3>Trace at runtime</h3>
+    <p>With the <code>trace</code> feature, every step records timing. Drain and render:</p>
 
-<pre><code>let entries = jigs::trace::take();
+    <pre><code class="language-rust">let entries = jigs::trace::take();
 print!("{}", jigs::log::render_tree(&amp;entries));   // human-readable
 print!("{}", jigs::log::render_ndjson(&amp;entries)); // one JSON object per line</code></pre>
 
-<p>A rendered tree looks like this:</p>
+    <div class="trace-demo">
+<span class="ok">log_incoming</span>     ok  0.1ms<br>
+<span class="ok">set_auth_state</span>   ok  2.3ms<br>
+<span class="err">route_to_feature</span> err 500<br>
+&nbsp;&nbsp;<span class="ok">validate_route</span>    ok  0.4ms<br>
+&nbsp;&nbsp;<span class="err">check_permissions</span> err DB Timeout
+    </div>
 
-<pre><code>log_incoming     ok  0.1ms
-set_auth_state   ok  2.3ms
-route_to_feature err 500
-  validate_route    ok  0.4ms
-  check_permissions err DB Timeout</code></pre>
+    <p>NDJSON carries <code>name</code>, <code>depth</code>, <code>duration_ns</code>, <code>ok</code>, and optional <code>error</code> per line.</p>
 
-<p>NDJSON is meant for log ingestion; each line carries <code>name</code>, <code>depth</code>, <code>duration_ns</code>, <code>ok</code>, and an optional <code>error</code>.</p>
+    <h2 id="caveats">Caveats</h2>
+    <p><code>.then()</code> compiles to plain function calls. No boxing, no dynamic dispatch, no hidden allocations. The <code>#[jig]</code> macro generates a marker struct that compiles away.</p>
 
-<h2 id="roadmap">Roadmap</h2>
-<ul class="roadmap">
-  <li class="done">basic functionality</li>
-  <li class="done">time tracing</li>
-  <li class="done">tree + NDJSON logging</li>
-  <li class="done">interactive map generation</li>
-  <li class="done">more complex examples (todo-api)</li>
-</ul>
+    <pre><code class="language-rust">// This compiles to direct function calls,
+// not a vtable or trait object dispatch:
+let response = Request(42u32)
+    .then(validate)
+    .then(handle);
 
-<h3>Maybe</h3>
-<ul class="roadmap">
-  <li class="open">IDE extension to view jigs in the editor</li>
-  <li class="open">terminal jigs-map</li>
-  <li class="open">runtime tracing rendered onto the map</li>
-  <li class="open">trace remote jigs services as one system</li>
-</ul>
+// The macro produces a marker struct
+// used only at compile time:
+struct __Jig_validate;
+impl JigDef for __Jig_validate { /* ... */ }</code></pre>
 
-<footer>
-  MIT licensed.
-  <a href="https://github.com/ValeriaVG/jigs">GitHub</a> ·
-  <a href="https://crates.io/crates/jigs">crates.io</a> ·
-  <a href="https://docs.rs/jigs">docs.rs</a>
-</footer>
+    <p><code>Request</code> and <code>Response</code> are generic wrappers you put your own data into. Use jigs with axum, actix-web, warp, tokio channels, Lambda handlers, CLI args, or plain function calls. Anywhere you have input that flows through steps to output.</p>
 
-</main>
+    <p>When a <code>#[jig]</code> function references a jig from another module, use the module-qualified path (<code>features::auth::authenticate</code>) instead of importing the function directly. Same-module jigs can be referenced by name.</p>
+
+    <h2 id="roadmap">Roadmap</h2>
+    <ul class="roadmap">
+      <li class="done">basic functionality</li>
+      <li class="done">time tracing</li>
+      <li class="done">tree + NDJSON logging</li>
+      <li class="done">interactive map generation</li>
+      <li class="done">complex examples (todo-api)</li>
+    </ul>
+
+    <h3>Maybe</h3>
+    <ul class="roadmap">
+      <li class="open">IDE extension to view jigs in the editor</li>
+      <li class="open">terminal jigs-map</li>
+      <li class="open">runtime tracing rendered onto the map</li>
+      <li class="open">trace remote jigs services as one system</li>
+    </ul>
+
+  </article>
+
+  <aside class="toc">
+    <nav>
+      <a href="#examples">Examples</a>
+      <a href="#quickstart">Quickstart</a>
+      <a href="#caveats">Caveats</a>
+      <a href="#roadmap">Roadmap</a>
+    </nav>
+  </aside>
+
+  <footer>
+    MIT licensed. <a href="https://github.com/ValeriaVG/jigs">GitHub</a> &middot;
+    <a href="https://crates.io/crates/jigs">crates.io</a> &middot;
+    <a href="https://docs.rs/jigs">docs.rs</a>
+  </footer>
+</div>
+
+<script>
+(function() {
+  var tabs = document.querySelector('#map-tabs');
+  var iframe = document.getElementById('map-iframe');
+  var fullLink = document.getElementById('map-full-link');
+  if (tabs && iframe) {
+    tabs.addEventListener('click', function(e) {
+      if (e.target.classList.contains('map-tab')) {
+        tabs.querySelectorAll('.map-tab').forEach(function(t) { t.classList.remove('active'); });
+        e.target.classList.add('active');
+        iframe.src = e.target.getAttribute('data-src');
+        fullLink.href = e.target.getAttribute('data-src');
+      }
+    });
+  }
+
+  var toc = document.querySelector('.toc nav');
+  if (!toc) return;
+  var links = toc.querySelectorAll('a');
+  var sections = [];
+  links.forEach(function(link) {
+    var id = link.getAttribute('href').slice(1);
+    var el = document.getElementById(id);
+    if (el) sections.push({ id: id, el: el, link: link });
+  });
+
+  function update() {
+    var scrolled = window.scrollY + 80;
+    var current = sections[0];
+    for (var i = 0; i < sections.length; i++) {
+      if (sections[i].el.offsetTop <= scrolled) current = sections[i];
+    }
+    links.forEach(function(l) { l.classList.remove('active'); });
+    if (current) current.link.classList.add('active');
+  }
+
+  window.addEventListener('scroll', update, { passive: true });
+  update();
+})();
+</script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-rust.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-bash.min.js"></script>
 </body>
 </html>
