@@ -46,9 +46,9 @@ fn resolve(name: &str, all: &Index) -> Option<&'static JigMeta> {
     None
 }
 
-/// Render the pipeline rooted at `entry` (or the alphabetically first jig if
-/// `None`) as a complete HTML document. `title` is shown in the page header
-/// and `<title>` tag.
+/// Render the pipeline rooted at the entry jig (the first jig returned by
+/// the iterator) as a complete HTML document. `title` is shown in the page
+/// header and `<title>` tag.
 ///
 /// `editor` is an optional URL template containing `{line}` plus either
 /// `{path}` (absolute file path, for local IDE handlers) or `{rel_path}`
@@ -64,15 +64,11 @@ fn resolve(name: &str, all: &Index) -> Option<&'static JigMeta> {
 /// - GitHub: `https://github.com/OWNER/REPO/blob/main/{rel_path}#L{line}`
 pub fn to_html(
     jigs: impl Iterator<Item = &'static JigMeta>,
-    entry: Option<&str>,
     title: &str,
     editor: Option<&str>,
 ) -> String {
     let all = build_index(jigs);
-    let entry = entry
-        .map(str::to_string)
-        .or_else(|| all.keys().next().map(|s| s.to_string()))
-        .unwrap_or_default();
+    let entry = all.keys().next().map(|s| s.to_string()).unwrap_or_default();
     let visible = reachable(&all, &entry);
     let data = encode(&visible, &entry, title, editor);
     TEMPLATE

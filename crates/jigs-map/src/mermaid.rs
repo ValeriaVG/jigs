@@ -52,29 +52,22 @@ fn resolve(name: &str, all: &Index) -> Option<&'static JigMeta> {
     None
 }
 
-/// Render the pipeline rooted at `entry` (or the first registered jig if
-/// `None`) as a Mermaid `flowchart TD` document, without any surrounding
+/// Render the pipeline rooted at the entry jig (the first jig returned by
+/// the iterator) as a Mermaid `flowchart TD` document, without any surrounding
 /// markdown fence.
-pub fn to_mermaid(jigs: impl Iterator<Item = &'static JigMeta>, entry: Option<&str>) -> String {
+pub fn to_mermaid(jigs: impl Iterator<Item = &'static JigMeta>) -> String {
     let all = build_index(jigs);
-    let entry = entry
-        .map(str::to_string)
-        .or_else(|| all.keys().next().map(|s| s.to_string()))
-        .unwrap_or_default();
+    let entry = all.keys().next().map(|s| s.to_string()).unwrap_or_default();
     render(&all, &entry)
 }
 
 /// Render the pipeline as a Markdown document with a Mermaid code fence,
 /// suitable for committing alongside the HTML map.
-pub fn to_markdown(
-    jigs: impl Iterator<Item = &'static JigMeta>,
-    entry: Option<&str>,
-    title: &str,
-) -> String {
+pub fn to_markdown(jigs: impl Iterator<Item = &'static JigMeta>, title: &str) -> String {
     let mut s = String::new();
     writeln!(s, "# {title}\n").ok();
     writeln!(s, "```mermaid").ok();
-    s.push_str(&to_mermaid(jigs, entry));
+    s.push_str(&to_mermaid(jigs));
     writeln!(s, "```").ok();
     s
 }

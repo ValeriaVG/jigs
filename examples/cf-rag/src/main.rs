@@ -38,7 +38,6 @@ async fn main() {
             format!("{html_dir}/index.html"),
             jigs::map::to_html(
                 all_jigs(),
-                Some("handle"),
                 "cf-rag example",
                 Some("https://github.com/ValeriaVG/jigs/blob/main/{rel_path}#L{line}"),
             ),
@@ -46,7 +45,7 @@ async fn main() {
         .expect("write index.html");
         std::fs::write(
             format!("{dir}/map.md"),
-            jigs::map::to_markdown(all_jigs(), Some("handle"), "cf-rag example"),
+            jigs::map::to_markdown(all_jigs(), "cf-rag example"),
         )
         .expect("write map.md");
         eprintln!("wrote {html_dir}/index.html and {dir}/map.md");

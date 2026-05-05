@@ -19,6 +19,7 @@ fn handle(request: Request) -> Response {
         .then(route_to_feature)
         .then(log_response)
 }
+jigs!(handle)
 ```
 
 Every step is a `jig` too, so you can compose processing pipelines of virtually any size.
@@ -110,17 +111,17 @@ fn main() -> std::io::Result<()> {
     let dir = env!("CARGO_MANIFEST_DIR");
     std::fs::write(
         format!("{dir}/map.html"),
-        jigs::map::to_html(all_jigs(), Some("handle"), "my service", None),
+        jigs::map::to_html(all_jigs(), "my service", None),
     )?;
     std::fs::write(
         format!("{dir}/map.md"),
-        jigs::map::to_markdown(all_jigs(), Some("handle"), "my service"),
+        jigs::map::to_markdown(all_jigs(), "my service"),
     )?;
     Ok(())
 }
 ```
 
-The third argument to `to_html` is an optional editor URL template. Use `{path}` for the absolute file path (local IDE handlers) or `{rel_path}` for the path relative to the workspace root (repo URLs); both forms also support `{line}`. Examples: `Some("vscodium://file/{path}:{line}")` for VSCodium, `vscode://file/{path}:{line}` for VS Code or Cursor, `idea://open?file={path}&line={line}` for JetBrains, `https://github.com/OWNER/REPO/blob/main/{rel_path}#L{line}` to link back to the repo. With `None` the link falls back to `file://` and opens with your OS default.
+The second argument to `to_html` is an optional editor URL template. Use `{path}` for the absolute file path (local IDE handlers) or `{rel_path}` for the path relative to the workspace root (repo URLs); both forms also support `{line}`. Examples: `Some("vscodium://file/{path}:{line}")` for VSCodium, `vscode://file/{path}:{line}` for VS Code or Cursor, `idea://open?file={path}&line={line}` for JetBrains, `https://github.com/OWNER/REPO/blob/main/{rel_path}#L{line}` to link back to the repo. With `None` the link falls back to `file://` and opens with your OS default.
 
 The Markdown form embeds a Mermaid flowchart that renders inline on GitHub — see [`examples/http/map.md`](./examples/http/map.md).
 

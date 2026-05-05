@@ -420,14 +420,14 @@ use my_crate::pipeline::{all_jigs, handle};
 let dir = env!("CARGO_MANIFEST_DIR");
 std::fs::write(
     format!("{dir}/map.html"),
-    jigs::map::to_html(all_jigs(), Some("handle"), "my service", None),
+    jigs::map::to_html(all_jigs(), "my service", None),
 )?;
 std::fs::write(
     format!("{dir}/map.md"),
-    jigs::map::to_markdown(all_jigs(), Some("handle"), "my service"),
+    jigs::map::to_markdown(all_jigs(), "my service"),
 )?;</code></pre>
 
-    <p>Every node in the map links to its source. The fourth argument to <code>to_html</code> is an editor URL template: <code>Some("vscode://file/{path}:{line}")</code> for VS Code, <code>Some("idea://open?file={path}&amp;line={line}")</code> for JetBrains, or <code>Some("https://github.com/OWNER/REPO/blob/main/{rel_path}#L{line}")</code> for GitHub.</p>
+    <p>Every node in the map links to its source. The third argument to <code>to_html</code> is an editor URL template: <code>Some("vscode://file/{path}:{line}")</code> for VS Code, <code>Some("idea://open?file={path}&amp;line={line}")</code> for JetBrains, or <code>Some("https://github.com/ValeriaVG/jigs/blob/main/{rel_path}#L{line}")</code> for GitHub.</p>
 
     <h3>Trace at runtime</h3>
     <p>With the <code>trace</code> feature, every step records timing. Drain and render:</p>

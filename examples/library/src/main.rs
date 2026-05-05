@@ -10,7 +10,6 @@ fn main() {
             format!("{html_dir}/index.html"),
             jigs::map::to_html(
                 all_jigs(),
-                Some("handle"),
                 "library example",
                 Some("https://github.com/ValeriaVG/jigs/blob/main/{rel_path}#L{line}"),
             ),
@@ -18,7 +17,7 @@ fn main() {
         .expect("write index.html");
         std::fs::write(
             format!("{dir}/map.md"),
-            jigs::map::to_markdown(all_jigs(), Some("handle"), "library example"),
+            jigs::map::to_markdown(all_jigs(), "library example"),
         )
         .expect("write map.md");
         eprintln!("wrote {html_dir}/index.html and {dir}/map.md");

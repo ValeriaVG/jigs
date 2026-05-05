@@ -32,14 +32,13 @@ fn main() -> std::io::Result<()> {
             format!("{html_dir}/index.html"),
             jigs::map::to_html(
                 all_jigs(),
-                Some("handle"),
                 "todo-api example",
                 Some("https://github.com/ValeriaVG/jigs/blob/main/{rel_path}#L{line}"),
             ),
         )?;
         std::fs::write(
             format!("{dir}/map.md"),
-            jigs::map::to_markdown(all_jigs(), Some("handle"), "todo-api example"),
+            jigs::map::to_markdown(all_jigs(), "todo-api example"),
         )?;
         eprintln!("wrote {html_dir}/index.html and {dir}/map.md");
         return Ok(());

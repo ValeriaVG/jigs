@@ -67,7 +67,7 @@ fn macro_records_payload_types() {
 
 #[test]
 fn map_html_includes_registered_jigs() {
-    let html = ::jigs::map::to_html(all_jigs(), Some("entry"), "test pipeline", None);
+    let html = ::jigs::map::to_html(all_jigs(), "test pipeline", None);
     assert!(html.starts_with("<!doctype html>"));
     assert!(html.contains("\"entry\":\"entry\""));
     assert!(html.contains("\"validate\":{"));
