@@ -56,8 +56,12 @@ fn resolve(name: &str, all: &Index) -> Option<&'static JigMeta> {
 /// the iterator) as a Mermaid `flowchart TD` document, without any surrounding
 /// markdown fence.
 pub fn to_mermaid(jigs: impl Iterator<Item = &'static JigMeta>) -> String {
-    let all = build_index(jigs);
-    let entry = all.keys().next().map(|s| s.to_string()).unwrap_or_default();
+    let mut peekable = jigs.peekable();
+    let entry = peekable
+        .peek()
+        .map(|m| m.name.to_string())
+        .unwrap_or_default();
+    let all = build_index(peekable);
     render(&all, &entry)
 }
 

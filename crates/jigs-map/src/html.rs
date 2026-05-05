@@ -67,8 +67,12 @@ pub fn to_html(
     title: &str,
     editor: Option<&str>,
 ) -> String {
-    let all = build_index(jigs);
-    let entry = all.keys().next().map(|s| s.to_string()).unwrap_or_default();
+    let mut peekable = jigs.peekable();
+    let entry = peekable
+        .peek()
+        .map(|m| m.name.to_string())
+        .unwrap_or_default();
+    let all = build_index(peekable);
     let visible = reachable(&all, &entry);
     let data = encode(&visible, &entry, title, editor);
     TEMPLATE
