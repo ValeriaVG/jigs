@@ -1,7 +1,7 @@
 #![warn(missing_docs)]
 //! HTML and Mermaid map generators for `jigs` pipelines.
 //!
-//! Both renderers accept an iterator of [`JigMeta`] references, typically
+//! Both renderers accept an iterator of `JigMeta` references, typically
 //! produced by the `jigs!` macro's generated `all_jigs()` function. The
 //! entry point is inferred from the first jig in the iterator. Call from
 //! any binary in a crate that defines (or imports) the jigs you want

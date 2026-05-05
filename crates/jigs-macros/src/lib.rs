@@ -1,7 +1,7 @@
 //! Procedural macros for the `jigs` framework.
 //!
 //! `#[jig]` marks a function as a pipeline step. It emits a zero-sized
-//! marker struct implementing [`JigDef`] alongside the (possibly
+//! marker struct implementing `JigDef` alongside the (possibly
 //! transformed) function body. The marker struct is named
 //! `__Jig_<fn_name>` to avoid namespace collisions with the function
 //! itself. With the `trace` feature it additionally wraps the body in a

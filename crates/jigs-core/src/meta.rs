@@ -1,7 +1,7 @@
 //! Compile-time metadata for every `#[jig]` function in the binary.
 //!
 //! The `#[jig]` macro emits one zero-sized marker struct per annotated
-//! function and implements [`JigDef`] on it. The [`jigs!`] macro on the
+//! function and implements [`JigDef`] on it. The `jigs!` macro on the
 //! entry point recursively collects all reachable jig metadata through
 //! the trait system, with no link-time registration.
 
