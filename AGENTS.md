@@ -1,31 +1,78 @@
 # jigs
 
-Is a Rust request -> response processing framework that allows user to write something like:
+A Rust request-to-response pipeline framework. Functions annotated with `#[jig]` compose into a compile-time graph via `.then()` chaining.
+
+## Core Types
+
+- `Request<T>` — inbound payload wrapper; advanced via `.then(jig)`
+- `Response<T>` — wraps `Result<T, String>`; errors always flow through response-side jigs (finalizers always run)
+- `Branch<Req, Resp>` — `Continue(Request<Req>)` or `Done(Response<Resp>)`; guards that short-circuit
+- `Pending<F>` — wraps async futures; `#[jig]` on `async fn` rewrites the signature to return this
+
+## Four Jig Kinds
+
+| Kind | Signature | What `.then()` accepts it |
+|------|-----------|--------------------------|
+| Enrich | `Request<A> -> Request<B>` | After `Request`, after `Branch::Continue` |
+| Handler | `Request<A> -> Response<B>` | After `Request`, after `Branch::Continue` |
+| Guard | `Request<A> -> Branch<B, C>` | After `Request`, after `Branch::Continue` |
+| Post-process | `Response<A> -> Response<B>` | After `Response` (always runs, even on errors) |
+
+## Chaining Rules
+
+- `Request<T>.then(jig)` — jig can return `Request`, `Response`, or `Branch`
+- `Response<T>.then(jig)` — jig must return `Response<U>`; always runs, even on errors
+- `Branch<Req, Resp>.then(jig)` — if `Continue`, runs jig and merges; if `Done`, propagates without running jig
+  - jig returns `Request<New>` -> result is `Branch<New, Resp>`
+  - jig returns `Response` -> result is `Response` (both branches collapse)
+  - jig returns `Branch` -> nested branches flatten
+
+## Macros
+
+### `#[jig]`
+Annotates a function. Generates:
+- A `__Jig_<fn_name>` marker struct implementing `JigDef` with metadata
+- For async fns: rewrites `async fn foo(...) -> T` to `fn foo(...) -> Pending<impl Future<Output = T>>`
+
+### `jigs!(entry_fn)`
+Must be placed in the same module as the entry function. Generates `all_jigs()` and `find_jig()`.
+
+### `fork!(req, arm1, arm2, ...)`
+Pattern-matching dispatch. Expands to chained `if pred { jig(req) } else { ... }`. `_ => default` arm runs last.
+
 ```rust
-#[jig]
-fn handle(request: Request) -> Response {
-    request
-        .then(log_incoming)
-        .then(set_auth_state)
-        .then(route_to_feature)
-        .then(log_response)
-}
+fork!(req,
+    |r: &Raw| r.path.starts_with("/auth/") => features::auth::auth,
+    |r: &Raw| r.path.starts_with("/todos") => features::todos::todos,
+    _ => not_found,
+)
 ```
-And get a compile time graph of "jigs" as any element passed to `then` is a jig of its own.
 
-There are 4 types of jigs:
-- Request -> Request
-- Request -> Response
-- Response -> Response
-- Response -> Branch that either returns a response or continue passing the request
+## Conventions
 
-## Guidelines
-- Write an interface or a type first
-- Then write a test for the change you want to make
-- Only then write implementation itself
-- Keep files under 200 LOC and functions under 50
-- Use comments only when the purpose of code can't be derived from naming
-- Ditch emojis, emdashes and other annoying LLM telltales
-- In `fork!`, keep each arm's predicate and handler together: inline the predicate as a closure, or put a small named predicate fn immediately above its handler. Don't separate predicates from handlers and don't extract shared multi-route predicate helpers.
-- When a `#[jig]` function references a jig from another module, use the module-qualified path (`features::auth::authenticate`, not a direct import of the function name). This makes both the function and its `__Jig_<name>` marker struct visible to the macro-generated collection code. Same-module jigs can be referenced by name directly.
-- The `jigs!(entry_fn)` macro must be placed in the same module as the entry function. It generates `all_jigs()` and `find_jig()`.
+- **Module-qualified paths**: When a `#[jig]` fn references a jig from another module, use `features::auth::authenticate`, not a direct import. Same-module jigs can be referenced by name directly. This ensures the `__Jig_<name>` marker struct is visible to macro-generated collection code.
+- **fork! arms**: Keep each predicate and handler together. Inline predicates as closures, or place a small named predicate fn immediately above its handler. Don't separate predicates from handlers.
+- **Files under 200 LOC, functions under 50 lines**
+- **No comments** unless purpose can't be derived from naming
+- **No emojis, em dashes, or LLM telltales**
+
+## Workflow
+
+1. Write an interface or type first
+2. Write a test for the change you want to make
+3. Write the implementation
+
+## Error Handling
+
+- `Response::err("message")` for pipeline errors; errors are always `String`
+- `Response<T>.then(jig)` always runs, even on errors—finalizers always see the outcome
+- Jigs that should skip on error must check `Response::is_ok()` themselves
+- Domain errors (400, 401, etc.) go inside `Response::ok(HttpResponse::bad_request(...))`; `Response::err` is for internal/unexpected failures
+- Guards short-circuit with `Branch::Done(Response::err(...))` or `Branch::Done(Response::ok(...))` for successful short-circuits (e.g., cache hits)
+
+## Test Patterns
+
+- Direct `.then()` chains with assertions on the result
+- `Branch::Done` short-circuits: verify downstream jigs never run by asserting they would panic
+- `fork!` tests: verify first-match semantics and fallthrough
+- Async: use `block_on` helper (see `jigs-core/src/tests.rs`)
