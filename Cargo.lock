@@ -161,6 +161,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "jigs-example-library"
+version = "0.0.0"
+dependencies = [
+ "jigs",
+]
+
+[[package]]
 name = "jigs-example-todo-api"
 version = "0.0.0"
 dependencies = [

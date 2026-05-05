@@ -1,0 +1,15 @@
+[package]
+name = "jigs-example-library"
+version = "0.0.0"
+edition.workspace = true
+publish = false
+
+[lib]
+crate-type = ["staticlib", "cdylib", "lib"]
+
+[[bin]]
+name = "jigs-example-library"
+path = "src/main.rs"
+
+[dependencies]
+jigs = { path = "../../crates/jigs" }
