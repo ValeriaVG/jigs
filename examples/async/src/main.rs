@@ -1,4 +1,4 @@
-use jigs::{jig, Branch, Request, Response};
+use jigs::{jig, jigs, Branch, Request, Response};
 use std::time::Duration;
 
 struct Ctx {
@@ -67,6 +67,8 @@ async fn handle(req: Request<Ctx>) -> Response<String> {
     req.then(require_account).then(render).then(log_outbound)
 }
 
+jigs!(handle);
+
 #[tokio::main(flavor = "current_thread")]
 async fn main() {
     if std::env::var("JIGS_MAP").is_ok() {
@@ -76,6 +78,7 @@ async fn main() {
         std::fs::write(
             format!("{html_dir}/index.html"),
             jigs::map::to_html(
+                all_jigs(),
                 Some("handle"),
                 "async example",
                 Some("https://github.com/ValeriaVG/jigs/blob/main/{rel_path}#L{line}"),
@@ -84,7 +87,7 @@ async fn main() {
         .expect("write index.html");
         std::fs::write(
             format!("{dir}/map.md"),
-            jigs::map::to_markdown(Some("handle"), "async example"),
+            jigs::map::to_markdown(all_jigs(), Some("handle"), "async example"),
         )
         .expect("write map.md");
         eprintln!("wrote {html_dir}/index.html and {dir}/map.md");

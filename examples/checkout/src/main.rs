@@ -3,7 +3,7 @@ mod pipeline;
 mod store;
 mod types;
 
-use crate::pipeline::handle;
+use crate::pipeline::{all_jigs, handle};
 use crate::types::{CheckoutInput, Ctx};
 use jigs::Request;
 use std::time::Instant;
@@ -85,6 +85,7 @@ async fn main() {
         std::fs::write(
             format!("{html_dir}/index.html"),
             jigs::map::to_html(
+                all_jigs(),
                 Some("handle"),
                 "checkout example",
                 Some("https://github.com/ValeriaVG/jigs/blob/main/{rel_path}#L{line}"),
@@ -93,7 +94,7 @@ async fn main() {
         .expect("write index.html");
         std::fs::write(
             format!("{dir}/map.md"),
-            jigs::map::to_markdown(Some("handle"), "checkout example"),
+            jigs::map::to_markdown(all_jigs(), Some("handle"), "checkout example"),
         )
         .expect("write map.md");
         eprintln!("wrote {html_dir}/index.html and {dir}/map.md");

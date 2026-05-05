@@ -35,7 +35,7 @@
 
 pub use jigs_core::*;
 pub use jigs_core::{__fork_chain, fork};
-pub use jigs_macros::jig;
+pub use jigs_macros::{jig, jigs};
 
 #[cfg(feature = "trace")]
 pub use jigs_trace as trace;

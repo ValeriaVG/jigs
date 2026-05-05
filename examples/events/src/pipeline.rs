@@ -1,6 +1,6 @@
 use crate::features::{inventory, notifications, orders};
 use crate::types::{Event, EventCtx, EventResult, RawEvent};
-use jigs::{fork, jig, Branch, Request, Response};
+use jigs::{fork, jig, jigs, Branch, Request, Response};
 
 #[jig]
 fn log_incoming(req: Request<RawEvent>) -> Request<RawEvent> {
@@ -104,3 +104,5 @@ pub fn handle(req: Request<RawEvent>) -> Response<EventResult> {
     };
     routed.then(log_outbound)
 }
+
+jigs!(handle);

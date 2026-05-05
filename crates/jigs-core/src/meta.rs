@@ -1,8 +1,9 @@
 //! Compile-time metadata for every `#[jig]` function in the binary.
 //!
-//! The `#[jig]` macro emits one [`JigMeta`] per annotated function and
-//! registers it via the `inventory` crate. Consumers iterate them at runtime
-//! through [`all`].
+//! The `#[jig]` macro emits one zero-sized marker struct per annotated
+//! function and implements [`JigDef`] on it. The [`jigs!`] macro on the
+//! entry point recursively collects all reachable jig metadata through
+//! the trait system, with no link-time registration.
 
 /// How a chain entry was reached from the surrounding jig.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -63,14 +64,17 @@ impl JigMeta {
     }
 }
 
-inventory::collect!(JigMeta);
+/// Trait implemented by the zero-sized marker struct that the `#[jig]`
+/// macro emits alongside each jig function. The marker struct is named
+/// `__Jig_<fn_name>` to avoid namespace collisions with the function
+/// itself. The `jigs!` macro calls `<Entry as JigDef>::collect` to
+/// recursively gather metadata for every reachable jig, with no
+/// link-time registration.
+pub trait JigDef {
+    /// Static metadata for this jig.
+    const META: JigMeta;
 
-/// Iterator over every jig registered in the current binary.
-pub fn all() -> impl Iterator<Item = &'static JigMeta> {
-    inventory::iter::<JigMeta>()
-}
-
-/// Look up a jig by name. `O(N)` over the registry.
-pub fn find(name: &str) -> Option<&'static JigMeta> {
-    all().find(|m| m.name == name)
+    /// Append this jig's metadata to `out` and recursively collect every
+    /// jig reachable through [`Self::META`]'s chain, deduplicating by name.
+    fn collect(out: &mut Vec<&'static JigMeta>);
 }

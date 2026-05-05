@@ -2,7 +2,7 @@ mod features;
 mod pipeline;
 mod types;
 
-use crate::pipeline::handle;
+use crate::pipeline::{all_jigs, handle};
 use crate::types::RawEvent;
 use jigs::Request;
 use std::collections::HashMap;
@@ -16,6 +16,7 @@ fn main() {
         std::fs::write(
             format!("{html_dir}/index.html"),
             jigs::map::to_html(
+                all_jigs(),
                 Some("handle"),
                 "events bus example",
                 Some("https://github.com/ValeriaVG/jigs/blob/main/{rel_path}#L{line}"),
@@ -24,7 +25,7 @@ fn main() {
         .expect("write index.html");
         std::fs::write(
             format!("{dir}/map.md"),
-            jigs::map::to_markdown(Some("handle"), "events bus example"),
+            jigs::map::to_markdown(all_jigs(), Some("handle"), "events bus example"),
         )
         .expect("write map.md");
         eprintln!("wrote {html_dir}/index.html and {dir}/map.md");

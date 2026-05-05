@@ -1,6 +1,6 @@
 use crate::features::{agent, guard, ingest, output, retrieve};
 use crate::types::{AgentOutput, Ctx};
-use jigs::{jig, Branch, Request, Response};
+use jigs::{jig, jigs, Branch, Request, Response};
 
 #[jig]
 fn log_incoming(req: Request<Ctx>) -> Request<Ctx> {
@@ -36,3 +36,5 @@ pub async fn handle(req: Request<Ctx>) -> Response<AgentOutput> {
     };
     resp.then(output::finalize).then(log_outbound)
 }
+
+jigs!(handle);

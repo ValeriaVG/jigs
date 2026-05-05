@@ -218,9 +218,10 @@ fn handle(request: Request) -&gt; Response {
         .then(set_auth_state)
         .then(route_to_feature)
         .then(log_response)
-}</code></pre>
+}
+jigs!(handle);</code></pre>
 
-<p>Each step is itself a jig, so pipelines compose. Every <code>#[jig]</code> registers itself in a global inventory at link time, which means the whole graph is known at compile time and you can render it without scanning sources or running a build script.</p>
+<p>Each step is itself a jig, so pipelines compose. Every <code>#[jig]</code> gets a compile-time marker type that implements <code>JigDef</code>. The <code>jigs!(entry_fn)</code> macro walks the trait recursively and produces <code>all_jigs()</code> / <code>find_jig()</code>, which means the whole graph is known at compile time and you can render it without scanning sources or running a build script.</p>
 
 <h2 id="examples">Examples</h2>
 <p>Each link below opens the actual interactive map generated from the example crate. Nodes link back to source.</p>
@@ -311,17 +312,30 @@ fn route(req: Request&lt;HttpRequest&gt;) -&gt; Response&lt;String&gt; {
     )
 }</code></pre>
 
-<h2 id="map">Generate a map</h2>
-<p>Render an HTML map or a Mermaid-flavored Markdown one straight from your code:</p>
+<p>When a <code>#[jig]</code> function calls a jig from another module, use the module-qualified path (<code>features::auth::authenticate</code>) instead of importing the function directly. Same-module jigs can be referenced by name.</p>
 
-<pre><code>let dir = env!("CARGO_MANIFEST_DIR");
+<h2 id="map">Generate a map</h2>
+<p>Each <code>#[jig]</code> gets a compile-time marker type that implements <code>JigDef</code>. The <code>jigs!(entry_fn)</code> macro — placed in the same module as the entry function — walks the trait recursively and produces <code>all_jigs()</code> / <code>find_jig()</code>. Render an HTML map or a Mermaid-flavored Markdown one straight from your code:</p>
+
+<pre><code>// pipeline.rs — same module as the entry function
+use jigs::{jig, Request, Response};
+
+#[jig]
+fn handle(r: Request&lt;u32&gt;) -&gt; Response&lt;String&gt; { /* ... */ }
+
+jigs!(handle);  // generates all_jigs() and find_jig() here</code></pre>
+
+<pre><code>// main.rs
+use my_crate::pipeline::{all_jigs, handle};
+
+let dir = env!("CARGO_MANIFEST_DIR");
 std::fs::write(
     format!("{dir}/map.html"),
-    jigs::map::to_html(Some("handle"), "my service", None),
+    jigs::map::to_html(all_jigs(), Some("handle"), "my service", None),
 )?;
 std::fs::write(
     format!("{dir}/map.md"),
-    jigs::map::to_markdown(Some("handle"), "my service"),
+    jigs::map::to_markdown(all_jigs(), Some("handle"), "my service"),
 )?;</code></pre>
 
 <p>The third argument to <code>to_html</code> is an editor URL template. Use <code>{path}</code> for the absolute file path (local IDE handlers) or <code>{rel_path}</code> for the path relative to the workspace root (repo URLs); both also support <code>{line}</code>. Examples: <code>Some("vscode://file/{path}:{line}")</code> for VS Code or Cursor, <code>idea://open?file={path}&amp;line={line}</code> for JetBrains, or <code>https://github.com/OWNER/REPO/blob/main/{rel_path}#L{line}</code> to link back to the repo.</p>

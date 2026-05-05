@@ -8,7 +8,7 @@ pub fn render_ndjson(entries: &[Entry]) -> String {
     let mut out = String::new();
     for e in entries {
         out.push('{');
-        push_field_str(&mut out, "name", e.name);
+        push_field_str(&mut out, "name", e.name());
         out.push(',');
         push_field_num(&mut out, "depth", e.depth as u128);
         out.push(',');
@@ -66,11 +66,27 @@ fn push_json_str(out: &mut String, s: &str) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use jigs_core::JigMeta;
     use std::time::Duration;
+
+    fn meta(name: &'static str) -> &'static JigMeta {
+        Box::leak(Box::new(JigMeta {
+            name,
+            file: "",
+            line: 0,
+            kind: "Response",
+            input: "Request",
+            input_type: "",
+            output_type: "",
+            is_async: false,
+            module: "",
+            chain: &[],
+        }))
+    }
 
     fn entry(name: &'static str, depth: usize, ok: bool, err: Option<&str>) -> Entry {
         Entry {
-            name,
+            meta: meta(name),
             depth,
             duration: Duration::from_nanos(1_500),
             ok,

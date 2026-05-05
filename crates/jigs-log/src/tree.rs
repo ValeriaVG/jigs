@@ -10,7 +10,7 @@ pub fn render_tree(entries: &[Entry]) -> String {
             } else {
                 format!("{}└─ ", "  ".repeat(e.depth - 1))
             };
-            format!("{}{}", indent, e.name)
+            format!("{}{}", indent, e.name())
         })
         .collect();
     let width = labels.iter().map(|l| l.chars().count()).max().unwrap_or(0);
@@ -37,11 +37,27 @@ pub fn render_tree(entries: &[Entry]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use jigs_core::JigMeta;
     use std::time::Duration;
+
+    fn meta(name: &'static str) -> &'static JigMeta {
+        Box::leak(Box::new(JigMeta {
+            name,
+            file: "",
+            line: 0,
+            kind: "Response",
+            input: "Request",
+            input_type: "",
+            output_type: "",
+            is_async: false,
+            module: "",
+            chain: &[],
+        }))
+    }
 
     fn entry(name: &'static str, depth: usize, ok: bool, err: Option<&str>) -> Entry {
         Entry {
-            name,
+            meta: meta(name),
             depth,
             duration: Duration::from_micros(100),
             ok,

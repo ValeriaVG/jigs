@@ -1,4 +1,4 @@
-use crate::features::auth::authenticate;
+use crate::features::auth;
 use crate::http::HttpResponse;
 use crate::store::{Label, Store};
 use crate::types::{json_err, path_segments, Authed, Raw};
@@ -151,7 +151,7 @@ fn is_list_labels(r: &Raw) -> bool {
 }
 #[jig]
 fn list_labels(req: Request<Raw>) -> Response<HttpResponse> {
-    req.then(authenticate)
+    req.then(auth::authenticate)
         .then(load_labels)
         .then(render_many_labels)
 }
@@ -161,7 +161,7 @@ fn is_create_label(r: &Raw) -> bool {
 }
 #[jig]
 fn create_label(req: Request<Raw>) -> Response<HttpResponse> {
-    req.then(authenticate)
+    req.then(auth::authenticate)
         .then(parse_new_label)
         .then(insert_label)
         .then(render_one_label_created)
@@ -173,7 +173,7 @@ fn is_update_label(r: &Raw) -> bool {
 }
 #[jig]
 fn update_label(req: Request<Raw>) -> Response<HttpResponse> {
-    req.then(authenticate)
+    req.then(auth::authenticate)
         .then(parse_label_update)
         .then(apply_label_update)
         .then(render_one_label)
@@ -185,7 +185,7 @@ fn is_delete_label(r: &Raw) -> bool {
 }
 #[jig]
 fn delete_label(req: Request<Raw>) -> Response<HttpResponse> {
-    req.then(authenticate)
+    req.then(auth::authenticate)
         .then(parse_label_id)
         .then(remove_label)
         .then(render_label_removed)

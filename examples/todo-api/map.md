@@ -42,7 +42,7 @@ log_incoming --> dispatch
 dispatch --> log_outbound
   subgraph dispatch ["dispatch"]
     direction TB
-    subgraph auth ["auth"]
+    subgraph features::auth::auth ["features::auth::auth"]
       direction TB
       subgraph signup ["signup"]
         direction TB
@@ -54,74 +54,73 @@ dispatch --> log_outbound
         parse_credentials --> verify_credentials
         verify_credentials --> render_existing_token
       end
-      crate::pipeline::not_found
     end
-    subgraph todos ["todos"]
+    subgraph features::todos::todos ["features::todos::todos"]
       direction TB
       subgraph list ["list"]
         direction TB
-        authenticate --> load_todos
+        auth::authenticate --> load_todos
         load_todos --> render_many
       end
       subgraph create ["create"]
         direction TB
-        authenticate --> parse_new_todo
+        auth::authenticate --> parse_new_todo
         parse_new_todo --> insert_todo
         insert_todo --> render_one_created
       end
       subgraph get ["get"]
         direction TB
-        authenticate --> parse_todo_id
+        auth::authenticate --> parse_todo_id
         parse_todo_id --> load_todo
         load_todo --> render_one
       end
       subgraph update ["update"]
         direction TB
-        authenticate --> parse_todo_update
+        auth::authenticate --> parse_todo_update
         parse_todo_update --> apply_update
         apply_update --> render_one
       end
       subgraph delete ["delete"]
         direction TB
-        authenticate --> parse_todo_id
+        auth::authenticate --> parse_todo_id
         parse_todo_id --> remove_todo
         remove_todo --> render_removed
       end
       subgraph attach_label ["attach_label"]
         direction TB
-        authenticate --> parse_label_op
+        auth::authenticate --> parse_label_op
         parse_label_op --> attach
         attach --> render_one
       end
       subgraph detach_label ["detach_label"]
         direction TB
-        authenticate --> parse_label_op
+        auth::authenticate --> parse_label_op
         parse_label_op --> detach
         detach --> render_one
       end
     end
-    subgraph labels ["labels"]
+    subgraph features::labels::labels ["features::labels::labels"]
       direction TB
       subgraph list_labels ["list_labels"]
         direction TB
-        authenticate --> load_labels
+        auth::authenticate --> load_labels
         load_labels --> render_many_labels
       end
       subgraph create_label ["create_label"]
         direction TB
-        authenticate --> parse_new_label
+        auth::authenticate --> parse_new_label
         parse_new_label --> insert_label
         insert_label --> render_one_label_created
       end
       subgraph update_label ["update_label"]
         direction TB
-        authenticate --> parse_label_update
+        auth::authenticate --> parse_label_update
         parse_label_update --> apply_label_update
         apply_label_update --> render_one_label
       end
       subgraph delete_label ["delete_label"]
         direction TB
-        authenticate --> parse_label_id
+        auth::authenticate --> parse_label_id
         parse_label_id --> remove_label
         remove_label --> render_label_removed
       end

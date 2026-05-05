@@ -1,7 +1,7 @@
-use crate::features::{auth::auth, labels::labels, todos::todos};
+use crate::features;
 use crate::http::HttpResponse;
 use crate::types::{json_err, Raw};
-use jigs::{fork, jig, Request, Response};
+use jigs::{fork, jig, jigs, Request, Response};
 
 #[jig]
 fn log_incoming(req: Request<Raw>) -> Request<Raw> {
@@ -35,9 +35,9 @@ fn log_outbound(res: Response<HttpResponse>) -> Response<HttpResponse> {
 #[jig]
 fn dispatch(req: Request<Raw>) -> Response<HttpResponse> {
     fork!(req,
-        |r: &Raw| r.path.starts_with("/auth/")  => auth,
-        |r: &Raw| r.path.starts_with("/todos")  => todos,
-        |r: &Raw| r.path.starts_with("/labels") => labels,
+        |r: &Raw| r.path.starts_with("/auth/")  => features::auth::auth,
+        |r: &Raw| r.path.starts_with("/todos")  => features::todos::todos,
+        |r: &Raw| r.path.starts_with("/labels") => features::labels::labels,
         _ => not_found,
     )
 }
@@ -46,3 +46,5 @@ fn dispatch(req: Request<Raw>) -> Response<HttpResponse> {
 pub fn handle(req: Request<Raw>) -> Response<HttpResponse> {
     req.then(log_incoming).then(dispatch).then(log_outbound)
 }
+
+jigs!(handle);

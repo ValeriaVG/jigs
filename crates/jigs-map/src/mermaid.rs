@@ -14,9 +14,9 @@ use std::fmt::Write;
 
 type Index = BTreeMap<&'static str, Vec<&'static JigMeta>>;
 
-fn build_index() -> Index {
+fn build_index(jigs: impl Iterator<Item = &'static JigMeta>) -> Index {
     let mut map: Index = BTreeMap::new();
-    for m in jigs_core::all_jigs() {
+    for m in jigs {
         map.entry(m.name).or_default().push(m);
     }
     map
@@ -55,8 +55,8 @@ fn resolve(name: &str, all: &Index) -> Option<&'static JigMeta> {
 /// Render the pipeline rooted at `entry` (or the first registered jig if
 /// `None`) as a Mermaid `flowchart TD` document, without any surrounding
 /// markdown fence.
-pub fn to_mermaid(entry: Option<&str>) -> String {
-    let all = build_index();
+pub fn to_mermaid(jigs: impl Iterator<Item = &'static JigMeta>, entry: Option<&str>) -> String {
+    let all = build_index(jigs);
     let entry = entry
         .map(str::to_string)
         .or_else(|| all.keys().next().map(|s| s.to_string()))
@@ -66,11 +66,15 @@ pub fn to_mermaid(entry: Option<&str>) -> String {
 
 /// Render the pipeline as a Markdown document with a Mermaid code fence,
 /// suitable for committing alongside the HTML map.
-pub fn to_markdown(entry: Option<&str>, title: &str) -> String {
+pub fn to_markdown(
+    jigs: impl Iterator<Item = &'static JigMeta>,
+    entry: Option<&str>,
+    title: &str,
+) -> String {
     let mut s = String::new();
     writeln!(s, "# {title}\n").ok();
     writeln!(s, "```mermaid").ok();
-    s.push_str(&to_mermaid(entry));
+    s.push_str(&to_mermaid(jigs, entry));
     writeln!(s, "```").ok();
     s
 }

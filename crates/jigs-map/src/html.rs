@@ -8,9 +8,9 @@ const TEMPLATE: &str = include_str!("template.html");
 
 type Index = BTreeMap<&'static str, Vec<&'static JigMeta>>;
 
-fn build_index() -> Index {
+fn build_index(jigs: impl Iterator<Item = &'static JigMeta>) -> Index {
     let mut map: Index = BTreeMap::new();
-    for m in jigs_core::all_jigs() {
+    for m in jigs {
         map.entry(m.name).or_default().push(m);
     }
     map
@@ -62,8 +62,13 @@ fn resolve(name: &str, all: &Index) -> Option<&'static JigMeta> {
 /// - Sublime Text: `subl://{path}:{line}`
 /// - TextMate: `txmt://open/?url=file://{path}&line={line}`
 /// - GitHub: `https://github.com/OWNER/REPO/blob/main/{rel_path}#L{line}`
-pub fn to_html(entry: Option<&str>, title: &str, editor: Option<&str>) -> String {
-    let all = build_index();
+pub fn to_html(
+    jigs: impl Iterator<Item = &'static JigMeta>,
+    entry: Option<&str>,
+    title: &str,
+    editor: Option<&str>,
+) -> String {
+    let all = build_index(jigs);
     let entry = entry
         .map(str::to_string)
         .or_else(|| all.keys().next().map(|s| s.to_string()))

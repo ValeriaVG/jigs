@@ -1,4 +1,4 @@
-use jigs::{jig, Branch, Request, Response};
+use jigs::{jig, jigs, Branch, Request, Response};
 
 #[jig]
 fn log_incoming(req: Request<String>) -> Request<String> {
@@ -46,6 +46,8 @@ fn handle(request: Request<String>) -> Response<String> {
         .then(log_outbound)
 }
 
+jigs!(handle);
+
 fn main() {
     if std::env::var("JIGS_MAP").is_ok() {
         let dir = env!("CARGO_MANIFEST_DIR");
@@ -54,6 +56,7 @@ fn main() {
         std::fs::write(
             format!("{html_dir}/index.html"),
             jigs::map::to_html(
+                all_jigs(),
                 Some("handle"),
                 "hello example",
                 Some("https://github.com/ValeriaVG/jigs/blob/main/{rel_path}#L{line}"),
@@ -62,7 +65,7 @@ fn main() {
         .expect("write index.html");
         std::fs::write(
             format!("{dir}/map.md"),
-            jigs::map::to_markdown(Some("handle"), "hello example"),
+            jigs::map::to_markdown(all_jigs(), Some("handle"), "hello example"),
         )
         .expect("write map.md");
         eprintln!("wrote {html_dir}/index.html and {dir}/map.md");

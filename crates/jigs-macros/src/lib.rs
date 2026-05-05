@@ -1,11 +1,11 @@
 //! Procedural macros for the `jigs` framework.
 //!
-//! `#[jig]` marks a function as a pipeline step. It always registers a
-//! `JigMeta` entry in the global inventory (name, source location, return
-//! kind, and the names of jigs called via `.then(...)` inside the body) so
-//! the map generator and other tools can introspect the pipeline at runtime
-//! without re-parsing source. With the `trace` feature it additionally wraps
-//! the body in a thread-local trace recorder.
+//! `#[jig]` marks a function as a pipeline step. It emits a zero-sized
+//! marker struct implementing [`JigDef`] alongside the (possibly
+//! transformed) function body. The marker struct is named
+//! `__Jig_<fn_name>` to avoid namespace collisions with the function
+//! itself. With the `trace` feature it additionally wraps the body in a
+//! thread-local trace recorder.
 
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
@@ -13,18 +13,49 @@ use quote::quote;
 use syn::visit::Visit;
 use syn::{parse_macro_input, parse_quote, Expr, ExprMethodCall, ItemFn, ReturnType, Type};
 
+fn marker_ident(fn_name: &str) -> syn::Ident {
+    syn::parse_str(&format!("__Jig_{fn_name}")).unwrap()
+}
+
+fn marker_path_for(name: &str) -> TokenStream2 {
+    let segs: Vec<&str> = name.split("::").collect();
+    let last_idx = segs.len() - 1;
+    let path_segs: Vec<TokenStream2> = segs
+        .iter()
+        .enumerate()
+        .map(|(i, s)| {
+            if i == last_idx {
+                let mi = marker_ident(s);
+                quote!(#mi)
+            } else if *s == "crate" {
+                quote!(crate)
+            } else if *s == "super" {
+                quote!(super)
+            } else if *s == "self" {
+                quote!(self)
+            } else {
+                let id: syn::Ident = syn::parse_str(s).unwrap();
+                quote!(#id)
+            }
+        })
+        .collect();
+    quote!(#(#path_segs)::*)
+}
+
 #[proc_macro_attribute]
 pub fn jig(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let input = parse_macro_input!(item as ItemFn);
     let vis = &input.vis;
     let block = &input.block;
     let name_str = input.sig.ident.to_string();
+    let marker = marker_ident(&name_str);
     let kind_str = return_kind(&input.sig.output);
     let input_str = input_kind(&input.sig);
     let input_type_str = first_arg_payload(&input.sig);
     let output_type_str = return_payload(&input.sig.output);
     let is_async = input.sig.asyncness.is_some();
-    let chain_steps: Vec<TokenStream2> = collect_chain(&input.block)
+
+    let chain_tokens: Vec<TokenStream2> = collect_chain(&input.block)
         .into_iter()
         .map(|(name, kind)| {
             let kind_ident = match kind {
@@ -34,9 +65,22 @@ pub fn jig(_attr: TokenStream, item: TokenStream) -> TokenStream {
             quote! { ::jigs::ChainStep { name: #name, kind: #kind_ident } }
         })
         .collect();
-    let meta = quote! {
-        ::jigs::inventory::submit! {
-            ::jigs::JigMeta {
+
+    let chain_collect: Vec<TokenStream2> = collect_chain(&input.block)
+        .into_iter()
+        .map(|(name, _kind)| {
+            let path = marker_path_for(&name);
+            quote! { <#path as ::jigs::JigDef>::collect(out); }
+        })
+        .collect();
+
+    let marker_def = quote! {
+        #[allow(non_camel_case_types)]
+        #[doc(hidden)]
+        pub struct #marker;
+
+        impl ::jigs::JigDef for #marker {
+            const META: ::jigs::JigMeta = ::jigs::JigMeta {
                 name: #name_str,
                 file: file!(),
                 line: line!(),
@@ -46,7 +90,16 @@ pub fn jig(_attr: TokenStream, item: TokenStream) -> TokenStream {
                 output_type: #output_type_str,
                 is_async: #is_async,
                 module: module_path!(),
-                chain: &[#(#chain_steps),*],
+                chain: &[#(#chain_tokens),*],
+            };
+
+            fn collect(out: &mut Vec<&'static ::jigs::JigMeta>) {
+                let name = <Self as ::jigs::JigDef>::META.name;
+                if out.iter().any(|m| m.name == name) {
+                    return;
+                }
+                out.push(&<Self as ::jigs::JigDef>::META);
+                #(#chain_collect)*
             }
         }
     };
@@ -69,12 +122,36 @@ pub fn jig(_attr: TokenStream, item: TokenStream) -> TokenStream {
         };
 
         let body = async_body(block, &name_str, response_input_ident.as_ref());
-        return quote! { #meta #vis #sig { #body } }.into();
+        return quote! { #marker_def #vis #sig { #body } }.into();
     }
 
     let sig = &input.sig;
     let body = sync_body(block, &name_str, response_input_ident.as_ref());
-    quote! { #meta #vis #sig { #body } }.into()
+    quote! { #marker_def #vis #sig { #body } }.into()
+}
+
+#[proc_macro]
+pub fn jigs(input: TokenStream) -> TokenStream {
+    let entry: syn::Ident = parse_macro_input!(input);
+    let entry_marker = marker_ident(&entry.to_string());
+    quote! {
+        mod __jigs_registry {
+            pub fn all_jigs() -> impl Iterator<Item = &'static ::jigs::JigMeta> {
+                static CACHE: std::sync::OnceLock<Vec<&'static ::jigs::JigMeta>> = std::sync::OnceLock::new();
+                CACHE.get_or_init(|| {
+                    let mut v = Vec::new();
+                    <super::#entry_marker as ::jigs::JigDef>::collect(&mut v);
+                    v
+                }).iter().copied()
+            }
+
+            pub fn find_jig(name: &str) -> Option<&'static ::jigs::JigMeta> {
+                all_jigs().find(|m| m.name == name)
+            }
+        }
+        pub use __jigs_registry::{all_jigs, find_jig};
+    }
+    .into()
 }
 
 fn first_arg_ident(sig: &syn::Signature) -> Option<syn::Ident> {
@@ -92,13 +169,14 @@ fn sync_body(
     name_str: &str,
     response_input: Option<&syn::Ident>,
 ) -> TokenStream2 {
+    let marker = marker_ident(name_str);
     let snapshot = match response_input {
         Some(id) => quote! { let __jig_input_ok = ::jigs::Status::ok(&#id); },
         None => quote! { let __jig_input_ok = true; },
     };
     quote! {
         #snapshot
-        let __jig_idx = ::jigs::trace::enter(#name_str);
+        let __jig_idx = ::jigs::trace::enter(&<#marker as ::jigs::JigDef>::META);
         let __jig_start = ::std::time::Instant::now();
         let __jig_result = (move || #block)();
         let mut __jig_ok = ::jigs::Status::ok(&__jig_result);
@@ -127,6 +205,7 @@ fn async_body(
     name_str: &str,
     response_input: Option<&syn::Ident>,
 ) -> TokenStream2 {
+    let marker = marker_ident(name_str);
     let snapshot = match response_input {
         Some(id) => quote! { let __jig_input_ok = ::jigs::Status::ok(&#id); },
         None => quote! { let __jig_input_ok = true; },
@@ -134,7 +213,7 @@ fn async_body(
     quote! {
         ::jigs::Pending(async move {
             #snapshot
-            let __jig_idx = ::jigs::trace::enter(#name_str);
+            let __jig_idx = ::jigs::trace::enter(&<#marker as ::jigs::JigDef>::META);
             let __jig_start = ::std::time::Instant::now();
             let __jig_result = (async move #block).await;
             let mut __jig_ok = ::jigs::Status::ok(&__jig_result);

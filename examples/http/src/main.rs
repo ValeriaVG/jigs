@@ -1,7 +1,7 @@
 mod http;
 
 use http::{read_request, write_response, HttpRequest, HttpResponse};
-use jigs::{fork, jig, Branch, Request, Response};
+use jigs::{fork, jig, jigs, Branch, Request, Response};
 use std::net::TcpListener;
 
 #[jig]
@@ -70,6 +70,8 @@ fn handle(request: Request<HttpRequest>) -> Response<HttpResponse> {
         .then(log_outbound)
 }
 
+jigs!(handle);
+
 fn main() -> std::io::Result<()> {
     if std::env::var("JIGS_MAP").is_ok() {
         let dir = env!("CARGO_MANIFEST_DIR");
@@ -78,6 +80,7 @@ fn main() -> std::io::Result<()> {
         std::fs::write(
             format!("{html_dir}/index.html"),
             jigs::map::to_html(
+                all_jigs(),
                 Some("handle"),
                 "http example",
                 Some("https://github.com/ValeriaVG/jigs/blob/main/{rel_path}#L{line}"),
@@ -85,7 +88,7 @@ fn main() -> std::io::Result<()> {
         )?;
         std::fs::write(
             format!("{dir}/map.md"),
-            jigs::map::to_markdown(Some("handle"), "http example"),
+            jigs::map::to_markdown(all_jigs(), Some("handle"), "http example"),
         )?;
         eprintln!("wrote {html_dir}/index.html and {dir}/map.md");
         return Ok(());

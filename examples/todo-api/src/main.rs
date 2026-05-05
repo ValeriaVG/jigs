@@ -5,7 +5,7 @@ mod store;
 mod types;
 
 use crate::http::{read_request, write_response, HttpRequest, HttpResponse};
-use crate::pipeline::handle;
+use crate::pipeline::{all_jigs, handle};
 use crate::store::Store;
 use crate::types::Raw;
 use jigs::Request;
@@ -31,6 +31,7 @@ fn main() -> std::io::Result<()> {
         std::fs::write(
             format!("{html_dir}/index.html"),
             jigs::map::to_html(
+                all_jigs(),
                 Some("handle"),
                 "todo-api example",
                 Some("https://github.com/ValeriaVG/jigs/blob/main/{rel_path}#L{line}"),
@@ -38,7 +39,7 @@ fn main() -> std::io::Result<()> {
         )?;
         std::fs::write(
             format!("{dir}/map.md"),
-            jigs::map::to_markdown(Some("handle"), "todo-api example"),
+            jigs::map::to_markdown(all_jigs(), Some("handle"), "todo-api example"),
         )?;
         eprintln!("wrote {html_dir}/index.html and {dir}/map.md");
         return Ok(());

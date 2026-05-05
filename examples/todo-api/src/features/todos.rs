@@ -1,4 +1,4 @@
-use crate::features::auth::authenticate;
+use crate::features::auth;
 use crate::http::HttpResponse;
 use crate::store::{Store, Todo};
 use crate::types::{json_err, path_segments, Authed, Raw};
@@ -221,7 +221,9 @@ fn is_list(r: &Raw) -> bool {
 }
 #[jig]
 fn list(req: Request<Raw>) -> Response<HttpResponse> {
-    req.then(authenticate).then(load_todos).then(render_many)
+    req.then(auth::authenticate)
+        .then(load_todos)
+        .then(render_many)
 }
 
 fn is_create(r: &Raw) -> bool {
@@ -229,7 +231,7 @@ fn is_create(r: &Raw) -> bool {
 }
 #[jig]
 fn create(req: Request<Raw>) -> Response<HttpResponse> {
-    req.then(authenticate)
+    req.then(auth::authenticate)
         .then(parse_new_todo)
         .then(insert_todo)
         .then(render_one_created)
@@ -240,7 +242,7 @@ fn is_get(r: &Raw) -> bool {
 }
 #[jig]
 fn get(req: Request<Raw>) -> Response<HttpResponse> {
-    req.then(authenticate)
+    req.then(auth::authenticate)
         .then(parse_todo_id)
         .then(load_todo)
         .then(render_one)
@@ -251,7 +253,7 @@ fn is_update(r: &Raw) -> bool {
 }
 #[jig]
 fn update(req: Request<Raw>) -> Response<HttpResponse> {
-    req.then(authenticate)
+    req.then(auth::authenticate)
         .then(parse_todo_update)
         .then(apply_update)
         .then(render_one)
@@ -262,7 +264,7 @@ fn is_delete(r: &Raw) -> bool {
 }
 #[jig]
 fn delete(req: Request<Raw>) -> Response<HttpResponse> {
-    req.then(authenticate)
+    req.then(auth::authenticate)
         .then(parse_todo_id)
         .then(remove_todo)
         .then(render_removed)
@@ -274,7 +276,7 @@ fn is_attach(r: &Raw) -> bool {
 }
 #[jig]
 fn attach_label(req: Request<Raw>) -> Response<HttpResponse> {
-    req.then(authenticate)
+    req.then(auth::authenticate)
         .then(parse_label_op)
         .then(attach)
         .then(render_one)
@@ -286,7 +288,7 @@ fn is_detach(r: &Raw) -> bool {
 }
 #[jig]
 fn detach_label(req: Request<Raw>) -> Response<HttpResponse> {
-    req.then(authenticate)
+    req.then(auth::authenticate)
         .then(parse_label_op)
         .then(detach)
         .then(render_one)

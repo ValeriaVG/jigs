@@ -1,18 +1,18 @@
 #![warn(missing_docs)]
 //! HTML and Mermaid map generators for `jigs` pipelines.
 //!
-//! Both renderers read the global `JigMeta` inventory populated by the
-//! `#[jig]` macro. Call from any binary in a crate that defines (or imports)
-//! the jigs you want mapped — the linker pulls them in and the inventory
-//! iteration finds them.
+//! Both renderers accept an iterator of [`JigMeta`] references, typically
+//! produced by the `jigs!` macro's generated `all_jigs()` function. Call
+//! from any binary in a crate that defines (or imports) the jigs you want
+//! mapped.
 //!
 //! ```ignore
 //! fn main() -> std::io::Result<()> {
 //!     let dir = env!("CARGO_MANIFEST_DIR");
 //!     std::fs::write(format!("{dir}/map.html"),
-//!         jigs_map::to_html(Some("handle"), "my service", None))?;
+//!         jigs_map::to_html(jigs::all_jigs(), Some("handle"), "my service", None))?;
 //!     std::fs::write(format!("{dir}/map.md"),
-//!         jigs_map::to_markdown(Some("handle"), "my service"))?;
+//!         jigs_map::to_markdown(jigs::all_jigs(), Some("handle"), "my service"))?;
 //!     Ok(())
 //! }
 //! ```

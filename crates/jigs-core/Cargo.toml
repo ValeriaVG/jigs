@@ -14,4 +14,3 @@ categories.workspace = true
 documentation = "https://docs.rs/jigs-core"
 
 [dependencies]
-inventory = { workspace = true }

@@ -17,10 +17,7 @@
 //! `Response::is_ok` themselves.
 
 pub mod meta;
-pub use meta::{all as all_jigs, find as find_jig, ChainKind, ChainStep, JigMeta};
-
-#[doc(hidden)]
-pub use inventory;
+pub use meta::{ChainKind, ChainStep, JigDef, JigMeta};
 
 /// Inbound message flowing through a pipeline.
 pub struct Request<T>(pub T);

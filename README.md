@@ -71,6 +71,8 @@ There are four kinds of jigs, distinguished by their input and output types:
 
 The type system enforces ordering: once you hold a `Response`, you cannot chain a jig that expects a `Request`. Errored responses and `Branch::Done` short-circuit the rest of the pipeline.
 
+When a `#[jig]` function calls a jig from another module, use the module-qualified path (`features::auth::authenticate`) instead of importing the function directly. A single `use crate::features::auth` brings both the function and its marker type into scope, so the macro-generated collection code can find them. Same-module jigs can be referenced by name directly.
+
 See [`examples/`](./examples) for sync, async, HTTP, event listeners, and a multithreaded [todo API](./examples/todo-api) that demonstrates fork-based routing at multiple nesting depths.
 
 For multi-arm dispatch use `fork!`. First matching predicate wins, `_` is the default:
@@ -88,28 +90,31 @@ fn route(req: Request<HttpRequest>) -> Response<String> {
 
 ## Generate a map
 
-Every `#[jig]` registers itself in a global inventory at link time, so you can render an interactive HTML map and a Markdown/Mermaid version straight from your code — no scanning, no build script.
+Each `#[jig]` gets a compile-time marker type that implements `JigDef`. The `jigs!(entry_fn)` macro — placed in the same module as the entry function — walks the trait recursively and produces `all_jigs()` / `find_jig()`. You can render an interactive HTML map and a Markdown/Mermaid version straight from your code — no scanning, no build script.
 
 ```rust
+// pipeline.rs — same module as the entry function
 use jigs::{jig, Request, Response};
 
 #[jig]
-fn validate(r: Request<u32>) -> Request<u32> { r }
+fn handle(r: Request<u32>) -> Response<String> { /* ... */ }
 
-#[jig]
-fn handle(r: Request<u32>) -> Response<String> {
-    Response::ok(format!("got {}", r.0))
-}
+jigs!(handle);  // generates all_jigs() and find_jig() here
+```
+
+```rust
+// main.rs
+use my_crate::pipeline::{all_jigs, handle};
 
 fn main() -> std::io::Result<()> {
     let dir = env!("CARGO_MANIFEST_DIR");
     std::fs::write(
         format!("{dir}/map.html"),
-        jigs::map::to_html(Some("handle"), "my service", None),
+        jigs::map::to_html(all_jigs(), Some("handle"), "my service", None),
     )?;
     std::fs::write(
         format!("{dir}/map.md"),
-        jigs::map::to_markdown(Some("handle"), "my service"),
+        jigs::map::to_markdown(all_jigs(), Some("handle"), "my service"),
     )?;
     Ok(())
 }

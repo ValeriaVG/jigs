@@ -1,6 +1,6 @@
 use crate::features::{fulfillment, ingest, pricing, validation};
 use crate::types::{Ctx, OrderResult};
-use jigs::{jig, Branch, Request, Response};
+use jigs::{jig, jigs, Branch, Request, Response};
 
 #[jig]
 fn log_incoming(req: Request<Ctx>) -> Request<Ctx> {
@@ -39,3 +39,5 @@ pub async fn handle(req: Request<Ctx>) -> Response<OrderResult> {
     };
     resp.then(log_outbound)
 }
+
+jigs!(handle);
