@@ -50,14 +50,21 @@ use jigs::{jig, Request, Response};
 fn validate(r: Request<u32>) -> Request<u32> { r }
 
 #[jig]
-fn handle(r: Request<u32>) -> Response<String> {
+fn process(r: Request<u32>) -> Response<String> {
     Response::ok(format!("got {}", r.0))
+}
+
+#[jig]
+fn handle(request: Request) -> Response {
+    request
+        .then(validate)
+        .then(process)
 }
 
 jigs!(handle)
 
 fn main() {
-    let response = Request(42u32).then(validate).then(handle);
+    let response = hande(Request(42u32));
     assert_eq!(response.inner.unwrap(), "got 42");
 }
 ```
