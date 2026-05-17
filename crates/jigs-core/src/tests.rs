@@ -5,6 +5,10 @@ use super::*;
 #[derive(Debug, Clone, PartialEq)]
 struct ReqI32(i32);
 
+impl __Classify for ReqI32 {
+    const KIND: &'static str = "Request";
+}
+
 impl Request for ReqI32 {
     type Payload = i32;
     fn payload(&self) -> &i32 {
@@ -47,6 +51,10 @@ impl Status for ReqI32 {
 
 #[derive(Debug, Clone)]
 struct RespString(Result<String, String>);
+
+impl __Classify for RespString {
+    const KIND: &'static str = "Response";
+}
 
 impl RespString {
     fn ok(v: String) -> Self {
@@ -323,6 +331,10 @@ fn custom_request_implements_request_trait() {
 
     struct MyReq(MyPayload);
 
+    impl __Classify for MyReq {
+        const KIND: &'static str = "Request";
+    }
+
     impl Request for MyReq {
         type Payload = MyPayload;
         fn payload(&self) -> &MyPayload {
@@ -367,6 +379,10 @@ fn custom_response_implements_response_trait() {
     struct MyResp {
         ok: bool,
         value: String,
+    }
+
+    impl __Classify for MyResp {
+        const KIND: &'static str = "Response";
     }
 
     impl Response for MyResp {
@@ -437,6 +453,9 @@ fn custom_response_implements_response_trait() {
 #[test]
 fn default_error_msg_returns_some_on_err() {
     struct MinResp(bool);
+    impl __Classify for MinResp {
+        const KIND: &'static str = "Response";
+    }
     impl Response for MinResp {
         type Payload = ();
         fn ok(_: ()) -> Self {

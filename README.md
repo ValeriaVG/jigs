@@ -1,6 +1,8 @@
 # jigs
 
 > ⚠️ **Very early stage.** This project is in active, exploratory development and is nowhere close to being production ready. APIs will change, things will break, and entire ideas may be thrown out. Star it, watch it, play with it — but don't ship it.
+>
+> **This framework was developed with heavy use of AI. It must be rewritten by hand before it is safe to use for anything.**
 
 A jig is a custom-made tool that controls the location or motion of other tools.
 

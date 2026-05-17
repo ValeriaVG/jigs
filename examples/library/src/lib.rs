@@ -86,8 +86,8 @@ mod c_api {
     #[test]
     fn entry_meta_is_correct() {
         let m = find_jig("handle").unwrap();
-        assert_eq!(m.kind, "Other");
-        assert_eq!(m.input, "Other");
+        assert_eq!(m.kind, "Response");
+        assert_eq!(m.input, "Request");
         assert!(m.chain.iter().any(|s| s.name == "decode"));
         assert!(m.chain.iter().any(|s| s.name == "uppercase"));
     }

@@ -21,11 +21,16 @@ pub use meta::{ChainKind, ChainStep, JigDef, JigMeta};
 
 pub mod json;
 
+#[doc(hidden)]
+pub trait __Classify {
+    const KIND: &'static str;
+}
+
 /// An inbound message flowing through a pipeline.
 ///
 /// Types implementing this trait can be chained with `.then(jig)` on the
 /// request side.
-pub trait Request: Sized {
+pub trait Request: Sized + __Classify {
     /// Payload extracted from this request.
     type Payload;
     /// Borrow the payload.
@@ -48,7 +53,7 @@ pub trait Request: Sized {
 ///
 /// Types implementing this trait wrap a `Result` so that downstream jigs can
 /// short-circuit on error.
-pub trait Response: Sized {
+pub trait Response: Sized + __Classify {
     /// The payload carried by a successful response.
     type Payload;
     /// Construct a successful response.
@@ -103,6 +108,10 @@ pub enum Branch<Req, Resp> {
     Done(Resp),
 }
 
+impl<Req: Request, Resp: Response> __Classify for Branch<Req, Resp> {
+    const KIND: &'static str = "Branch";
+}
+
 impl<Req, Resp> Branch<Req, Resp> {
     /// Returns `true` if this is `Branch::Continue`.
     #[must_use]
@@ -143,6 +152,10 @@ where
 /// `Pending<impl Future<Output = T>>`. `Pending` itself impls `IntoFuture`, so the
 /// final `.await` resolves the whole chain.
 pub struct Pending<F>(pub F);
+
+impl<F> __Classify for Pending<F> {
+    const KIND: &'static str = "Pending";
+}
 
 /// Lifts the output of a jig into a future, so async and sync jigs can be chained
 /// uniformly inside a `Pending` chain. Sync values become a `Ready` future, a
@@ -300,6 +313,9 @@ where
 #[macro_export]
 macro_rules! impl_request {
     ($t:ty) => {
+        impl $crate::__Classify for $t {
+            const KIND: &'static str = "Request";
+        }
         impl $crate::Step for $t {
             type Out = $t;
             type Fut = ::core::future::Ready<$t>;
@@ -338,6 +354,9 @@ macro_rules! impl_request {
 #[macro_export]
 macro_rules! impl_response {
     ($t:ty) => {
+        impl $crate::__Classify for $t {
+            const KIND: &'static str = "Response";
+        }
         impl $crate::Step for $t {
             type Out = $t;
             type Fut = ::core::future::Ready<$t>;

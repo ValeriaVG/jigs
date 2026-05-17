@@ -54,11 +54,14 @@ pub fn jig(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let block = &input.block;
     let name_str = input.sig.ident.to_string();
     let marker = marker_ident(&name_str);
-    let kind_str = return_kind(&input.sig.output);
-    let input_str = input_kind(&input.sig);
     let input_type_str = first_arg_payload(&input.sig);
     let output_type_str = return_payload(&input.sig.output);
     let is_async = input.sig.asyncness.is_some();
+
+    let input_ty = first_arg_type(&input.sig);
+    let output_ty = return_type(&input.sig.output);
+    let kind_expr = classify_expr(output_ty.as_ref());
+    let input_expr = classify_expr(input_ty.as_ref());
 
     let chain = collect_chain(&input.block);
 
@@ -91,8 +94,8 @@ pub fn jig(_attr: TokenStream, item: TokenStream) -> TokenStream {
                 name: #name_str,
                 file: file!(),
                 line: line!(),
-                kind: #kind_str,
-                input: #input_str,
+                kind: #kind_expr,
+                input: #input_expr,
                 input_type: #input_type_str,
                 output_type: #output_type_str,
                 is_async: #is_async,
@@ -182,6 +185,9 @@ fn generate_req(input: &DeriveInput) -> Result<TokenStream, syn::Error> {
     let (merge_impl_generics, _, merge_where_clause) = merge_generics.split_for_impl();
 
     Ok(quote! {
+        impl #impl_generics ::jigs::__Classify for #name #type_generics #where_clause {
+            const KIND: &'static str = "Request";
+        }
         impl #impl_generics ::jigs::Request for #name #type_generics #where_clause {
             #payload_decl
             fn payload(&self) -> &Self::Payload {
@@ -738,6 +744,9 @@ fn generate_response_impls(parts: ResponseImplParts<'_>) -> proc_macro::TokenStr
         error_msg_expr,
     } = parts;
     quote! {
+        impl #impl_generics ::jigs::__Classify for #name #type_generics #where_clause {
+            const KIND: &'static str = "Response";
+        }
         impl #impl_generics ::jigs::Response for #name #type_generics #where_clause {
             type Payload = #payload_ty;
             fn ok(payload: Self::Payload) -> Self {
@@ -945,29 +954,24 @@ fn async_body(
     quote! { ::jigs::Pending(async move #block) }
 }
 
-fn return_kind(ret: &ReturnType) -> &'static str {
-    let ty = match ret {
-        ReturnType::Default => return "Other",
-        ReturnType::Type(_, t) => t,
-    };
-    match last_type_ident(ty).as_deref() {
-        Some("Request") => "Request",
-        Some("Response") => "Response",
-        Some("Branch") => "Branch",
-        Some("Pending") => "Pending",
-        _ => "Other",
+fn first_arg_type(sig: &syn::Signature) -> Option<Type> {
+    match sig.inputs.first() {
+        Some(syn::FnArg::Typed(pt)) => Some((*pt.ty).clone()),
+        _ => None,
     }
 }
 
-fn input_kind(sig: &syn::Signature) -> &'static str {
-    let ty = match sig.inputs.first() {
-        Some(syn::FnArg::Typed(pt)) => &*pt.ty,
-        _ => return "Other",
-    };
-    match last_type_ident(ty).as_deref() {
-        Some("Request") => "Request",
-        Some("Response") => "Response",
-        _ => "Other",
+fn return_type(ret: &ReturnType) -> Option<Type> {
+    match ret {
+        ReturnType::Type(_, t) => Some((**t).clone()),
+        _ => None,
+    }
+}
+
+fn classify_expr(ty: Option<&Type>) -> TokenStream2 {
+    match ty {
+        Some(t) => quote!(<#t as ::jigs::__Classify>::KIND),
+        None => quote!("Other"),
     }
 }
 
@@ -1026,13 +1030,6 @@ fn generic_args_string(args: &syn::AngleBracketedGenericArguments) -> String {
         }
     }
     out
-}
-
-fn last_type_ident(ty: &Type) -> Option<String> {
-    if let Type::Path(p) = ty {
-        return Some(p.path.segments.last()?.ident.to_string());
-    }
-    None
 }
 
 #[derive(Clone, Copy)]

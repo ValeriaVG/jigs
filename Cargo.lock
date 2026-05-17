@@ -177,6 +177,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "jigs-example-typeflow"
+version = "0.0.0"
+dependencies = [
+ "jigs",
+]
+
+[[package]]
 name = "jigs-log"
 version = "0.2.0"
 dependencies = [

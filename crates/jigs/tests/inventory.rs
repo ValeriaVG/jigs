@@ -246,9 +246,9 @@ fn fork_arms_appear_in_chain_metadata() {
 
 #[test]
 fn macro_records_return_kind() {
-    assert_eq!(find_jig("validate").unwrap().kind, "Other");
-    assert_eq!(find_jig("router").unwrap().kind, "Other");
-    assert_eq!(find_jig("fallback").unwrap().kind, "Other");
+    assert_eq!(find_jig("validate").unwrap().kind, "Request");
+    assert_eq!(find_jig("router").unwrap().kind, "Response");
+    assert_eq!(find_jig("fallback").unwrap().kind, "Response");
 }
 
 #[test]

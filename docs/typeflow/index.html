@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>async example — jigs map</title>
+<title>typeflow example — jigs map</title>
 <style>
   :root {
     --bg: #fafaf9;
@@ -329,7 +329,7 @@
   <a class="skip" href="#canvas">Skip to map</a>
   <header>
     <div class="header-row">
-      <p class="brand" id="title-slot">async example</p>
+      <p class="brand" id="title-slot">typeflow example</p>
       <button class="theme-toggle" id="theme-toggle" type="button"
               aria-label="Toggle dark mode" title="Toggle theme">
         <svg class="icon-moon" viewBox="0 0 24 24" fill="none"
@@ -364,7 +364,7 @@
     <span class="group"><kbd>Esc</kbd> back up</span>
     <span class="group"><kbd>Alt</kbd>+<kbd>←</kbd> / <kbd>→</kbd> history</span>
   </footer>
-  <script id="data" type="application/json">{"entry":"handle","title":"async example","editor":"https://github.com/ValeriaVG/jigs/blob/main/{rel_path}#L{line}","nodes":{"enrich":{"file":"examples/async/src/main.rs","basename":"main.rs","module":"jigs_example_async","kind":"Request","input":"Request","input_type":"AppReq","output_type":"AppReq","async":true,"children":[],"child_kinds":[]},"handle":{"file":"examples/async/src/main.rs","basename":"main.rs","module":"jigs_example_async","kind":"Response","input":"Request","input_type":"AppReq","output_type":"AppResp","async":true,"children":["log_incoming","enrich","require_account","render","log_outbound"],"child_kinds":["then","then","then","then","then"]},"log_incoming":{"file":"examples/async/src/main.rs","basename":"main.rs","module":"jigs_example_async","kind":"Request","input":"Request","input_type":"AppReq","output_type":"AppReq","async":false,"children":[],"child_kinds":[]},"log_outbound":{"file":"examples/async/src/main.rs","basename":"main.rs","module":"jigs_example_async","kind":"Response","input":"Response","input_type":"AppResp","output_type":"AppResp","async":false,"children":[],"child_kinds":[]},"render":{"file":"examples/async/src/main.rs","basename":"main.rs","module":"jigs_example_async","kind":"Response","input":"Request","input_type":"AppReq","output_type":"AppResp","async":false,"children":[],"child_kinds":[]},"require_account":{"file":"examples/async/src/main.rs","basename":"main.rs","module":"jigs_example_async","kind":"Branch","input":"Request","input_type":"AppReq","output_type":"Branch\u003cAppReq,AppResp>","async":false,"children":[],"child_kinds":[]}}}</script>
+  <script id="data" type="application/json">{"entry":"handle","title":"typeflow example","editor":"https://github.com/ValeriaVG/jigs/blob/main/{rel_path}#L{line}","nodes":{"calculate":{"file":"examples/typeflow/src/features/compute.rs","basename":"compute.rs","module":"jigs_example_typeflow::features::compute","kind":"Response","input":"Request","input_type":"ComputeReq","output_type":"OutputResp","async":false,"children":[],"child_kinds":[]},"features::auth::authenticate":{"file":"examples/typeflow/src/features/auth.rs","basename":"auth.rs","module":"jigs_example_typeflow::features::auth","kind":"Branch","input":"Request","input_type":"RawReq","output_type":"Branch\u003cAuthReq,OutputResp>","async":false,"children":[],"child_kinds":[]},"features::compute::compute":{"file":"examples/typeflow/src/features/compute.rs","basename":"compute.rs","module":"jigs_example_typeflow::features::compute","kind":"Response","input":"Request","input_type":"AuthReq","output_type":"OutputResp","async":false,"children":["prepare","calculate"],"child_kinds":["then","then"]},"handle":{"file":"examples/typeflow/src/pipeline.rs","basename":"pipeline.rs","module":"jigs_example_typeflow::pipeline","kind":"Response","input":"Request","input_type":"RawReq","output_type":"OutputResp","async":false,"children":["log_incoming","features::auth::authenticate","features::compute::compute","log_outbound"],"child_kinds":["then","then","then","then"]},"log_incoming":{"file":"examples/typeflow/src/pipeline.rs","basename":"pipeline.rs","module":"jigs_example_typeflow::pipeline","kind":"Request","input":"Request","input_type":"RawReq","output_type":"RawReq","async":false,"children":[],"child_kinds":[]},"log_outbound":{"file":"examples/typeflow/src/pipeline.rs","basename":"pipeline.rs","module":"jigs_example_typeflow::pipeline","kind":"Response","input":"Response","input_type":"OutputResp","output_type":"OutputResp","async":false,"children":[],"child_kinds":[]},"prepare":{"file":"examples/typeflow/src/features/compute.rs","basename":"compute.rs","module":"jigs_example_typeflow::features::compute","kind":"Branch","input":"Request","input_type":"AuthReq","output_type":"Branch\u003cComputeReq,OutputResp>","async":false,"children":[],"child_kinds":[]}}}</script>
   <script>
   (() => {
     const DATA = JSON.parse(document.getElementById('data').textContent);

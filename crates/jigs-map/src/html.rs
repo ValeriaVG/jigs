@@ -86,6 +86,16 @@ fn encode(
         push_json_str(&mut s, basename(m.file));
         s.push_str(",\"module\":");
         push_json_str(&mut s, m.module);
+        s.push_str(",\"kind\":");
+        push_json_str(&mut s, m.kind);
+        s.push_str(",\"input\":");
+        push_json_str(&mut s, m.input);
+        s.push_str(",\"input_type\":");
+        push_json_str(&mut s, m.input_type);
+        s.push_str(",\"output_type\":");
+        push_json_str(&mut s, m.output_type);
+        s.push_str(",\"async\":");
+        s.push_str(if m.is_async { "true" } else { "false" });
         s.push_str(",\"children\":[");
         for (j, c) in m.chain.iter().enumerate() {
             if j > 0 {
