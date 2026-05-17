@@ -2,16 +2,10 @@
 
 ```mermaid
 flowchart TD
-  log_incoming["log_incoming<br/><i>?</i>"]
-  parse["parse<br/><i>?</i>"]
-  enrich["enrich<br/><i>?</i>"]
-  route["route<br/><i>?</i>"]
-  log_outbound["log_outbound<br/><i>?</i>"]
+  validate_notification["validate_notification<br/><i>?</i>"]
+  build_result["build_result<br/><i>?</i>"]
 
-log_incoming --> parse
-parse --> enrich
-enrich --> route
-route --> log_outbound
+validate_notification --> build_result
 
   %% shape legend: rect = Request → Request, rhombus = switching (Request → Response/Branch), stadium = Response → Response
 ```

@@ -111,11 +111,7 @@ pub fn jig(_attr: TokenStream, item: TokenStream) -> TokenStream {
         }
     };
 
-    let response_input_ident = if input_str == "Response" {
-        first_arg_ident(&input.sig)
-    } else {
-        None
-    };
+    let input_ident = first_arg_ident(&input.sig);
 
     if input.sig.asyncness.is_some() {
         let mut sig = input.sig.clone();
@@ -128,12 +124,12 @@ pub fn jig(_attr: TokenStream, item: TokenStream) -> TokenStream {
             -> ::jigs::Pending<impl ::core::future::Future<Output = #ret_ty>>
         };
 
-        let body = async_body(block, &name_str, response_input_ident.as_ref());
+        let body = async_body(block, &name_str, input_ident.as_ref());
         return quote! { #marker_def #(#attrs)* #vis #sig { #body } }.into();
     }
 
     let sig = &input.sig;
-    let body = sync_body(block, &name_str, response_input_ident.as_ref());
+    let body = sync_body(block, &name_str, input_ident.as_ref());
     quote! { #marker_def #(#attrs)* #vis #sig { #body } }.into()
 }
 
@@ -880,9 +876,9 @@ struct TraceParts {
 }
 
 #[cfg(feature = "trace")]
-fn trace_instrument(name_str: &str, response_input: Option<&syn::Ident>) -> TraceParts {
+fn trace_instrument(name_str: &str, input_ident: Option<&syn::Ident>) -> TraceParts {
     let marker = marker_ident(name_str);
-    let snapshot = if let Some(id) = response_input {
+    let snapshot = if let Some(id) = input_ident {
         quote! { let __jig_input_ok = ::jigs::Status::succeeded(&#id); }
     } else {
         quote! { let __jig_input_ok = true; }
@@ -906,12 +902,8 @@ fn trace_instrument(name_str: &str, response_input: Option<&syn::Ident>) -> Trac
 }
 
 #[cfg(feature = "trace")]
-fn sync_body(
-    block: &syn::Block,
-    name_str: &str,
-    response_input: Option<&syn::Ident>,
-) -> TokenStream2 {
-    let TraceParts { pre, post } = trace_instrument(name_str, response_input);
+fn sync_body(block: &syn::Block, name_str: &str, input_ident: Option<&syn::Ident>) -> TokenStream2 {
+    let TraceParts { pre, post } = trace_instrument(name_str, input_ident);
     quote! {
         #pre
         let __jig_result = (move || #block)();
@@ -921,9 +913,9 @@ fn sync_body(
 
 #[cfg(not(feature = "trace"))]
 fn sync_body(
-    block: &syn::Block,
+    _block: &syn::Block,
     _name_str: &str,
-    _response_input: Option<&syn::Ident>,
+    _input_ident: Option<&syn::Ident>,
 ) -> TokenStream2 {
     quote! { #block }
 }
@@ -932,9 +924,9 @@ fn sync_body(
 fn async_body(
     block: &syn::Block,
     name_str: &str,
-    response_input: Option<&syn::Ident>,
+    input_ident: Option<&syn::Ident>,
 ) -> TokenStream2 {
-    let TraceParts { pre, post } = trace_instrument(name_str, response_input);
+    let TraceParts { pre, post } = trace_instrument(name_str, input_ident);
     quote! {
         ::jigs::Pending(async move {
             #pre
@@ -946,9 +938,9 @@ fn async_body(
 
 #[cfg(not(feature = "trace"))]
 fn async_body(
-    block: &syn::Block,
+    _block: &syn::Block,
     _name_str: &str,
-    _response_input: Option<&syn::Ident>,
+    _input_ident: Option<&syn::Ident>,
 ) -> TokenStream2 {
     quote! { ::jigs::Pending(async move #block) }
 }

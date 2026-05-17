@@ -81,11 +81,7 @@ fn main() {
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty())
         .unwrap_or_default();
-    let response = handle(NameReq(name));
-    match response.0 {
-        Ok(v) => println!("{v}"),
-        Err(e) => println!("ERROR: {e}"),
-    }
+    let _response = handle(NameReq(name));
     let entries = jigs::trace::take();
     if std::env::var("JIGS_LOG_JSON").is_ok() {
         print!("{}", jigs::log::render_ndjson(&entries));

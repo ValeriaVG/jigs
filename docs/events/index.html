@@ -364,7 +364,7 @@
     <span class="group"><kbd>Esc</kbd> back up</span>
     <span class="group"><kbd>Alt</kbd>+<kbd>←</kbd> / <kbd>→</kbd> history</span>
   </footer>
-  <script id="data" type="application/json">{"entry":"handle","title":"events bus example","editor":"https://github.com/ValeriaVG/jigs/blob/main/{rel_path}#L{line}","nodes":{"enrich":{"file":"examples/events/src/pipeline.rs","line":71,"kind":"Other","input":"Other","input_type":"EventReq","output_type":"EventReq","async":false,"file_abs":"/Users/valeria/git/jigs/examples/events/src/pipeline.rs","basename":"pipeline.rs","module":"jigs_example_events::pipeline","children":[],"child_kinds":[]},"handle":{"file":"examples/events/src/pipeline.rs","line":98,"kind":"Other","input":"Other","input_type":"RawReq","output_type":"EventResp","async":false,"file_abs":"/Users/valeria/git/jigs/examples/events/src/pipeline.rs","basename":"pipeline.rs","module":"jigs_example_events::pipeline","children":["log_incoming","parse","enrich","route","log_outbound"],"child_kinds":["then","then","then","then","then"]},"log_incoming":{"file":"examples/events/src/pipeline.rs","line":5,"kind":"Other","input":"Other","input_type":"RawReq","output_type":"RawReq","async":false,"file_abs":"/Users/valeria/git/jigs/examples/events/src/pipeline.rs","basename":"pipeline.rs","module":"jigs_example_events::pipeline","children":[],"child_kinds":[]},"log_outbound":{"file":"examples/events/src/pipeline.rs","line":90,"kind":"Other","input":"Other","input_type":"EventResp","output_type":"EventResp","async":false,"file_abs":"/Users/valeria/git/jigs/examples/events/src/pipeline.rs","basename":"pipeline.rs","module":"jigs_example_events::pipeline","children":[],"child_kinds":[]},"parse":{"file":"examples/events/src/pipeline.rs","line":57,"kind":"Branch","input":"Other","input_type":"RawReq","output_type":"Branch\u003cEventReq,EventResp>","async":false,"file_abs":"/Users/valeria/git/jigs/examples/events/src/pipeline.rs","basename":"pipeline.rs","module":"jigs_example_events::pipeline","children":[],"child_kinds":[]},"route":{"file":"examples/events/src/pipeline.rs","line":80,"kind":"Other","input":"Other","input_type":"EventReq","output_type":"EventResp","async":false,"file_abs":"/Users/valeria/git/jigs/examples/events/src/pipeline.rs","basename":"pipeline.rs","module":"jigs_example_events::pipeline","children":[],"child_kinds":[]}}}</script>
+  <script id="data" type="application/json">{"entry":"handle","title":"events bus example","editor":"https://github.com/ValeriaVG/jigs/blob/main/{rel_path}#L{line}","nodes":{"build_result":{"file":"examples/events/src/features/notifications.rs","basename":"notifications.rs","module":"jigs_example_events::features::notifications","children":[],"child_kinds":[]},"handle":{"file":"examples/events/src/features/notifications.rs","basename":"notifications.rs","module":"jigs_example_events::features::notifications","children":["validate_notification","build_result"],"child_kinds":["then","then"]},"validate_notification":{"file":"examples/events/src/features/notifications.rs","basename":"notifications.rs","module":"jigs_example_events::features::notifications","children":[],"child_kinds":[]}}}</script>
   <script>
   (() => {
     const DATA = JSON.parse(document.getElementById('data').textContent);
@@ -500,11 +500,11 @@
       if (tmpl) {
         return tmpl
           .replace('{rel_path}', encodeURI(n.file || ''))
-          .replace('{path}', encodeURI(n.file_abs || n.file || ''))
+          .replace('{path}', encodeURI(n.file || ''))
           .replace('{line}', String(n.line));
       }
-      const path = n.file_abs || n.file;
-      const abs = path.startsWith('/') ? path : '/' + path;
+      const filePath = n.file || '';
+      const abs = filePath.startsWith('/') ? filePath : '/' + filePath;
       return 'file://' + encodeURI(abs);
     }
     function category(meta) {
