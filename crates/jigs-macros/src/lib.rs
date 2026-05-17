@@ -922,7 +922,7 @@ fn sync_body(block: &syn::Block, name_str: &str, input_ident: Option<&syn::Ident
 
 #[cfg(not(feature = "trace"))]
 fn sync_body(
-    _block: &syn::Block,
+    block: &syn::Block,
     _name_str: &str,
     _input_ident: Option<&syn::Ident>,
 ) -> TokenStream2 {
@@ -947,7 +947,7 @@ fn async_body(
 
 #[cfg(not(feature = "trace"))]
 fn async_body(
-    _block: &syn::Block,
+    block: &syn::Block,
     _name_str: &str,
     _input_ident: Option<&syn::Ident>,
 ) -> TokenStream2 {
