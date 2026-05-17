@@ -16,6 +16,7 @@ pub struct Doc {
     pub score: f32,
 }
 
+#[derive(Clone)]
 pub struct Ctx {
     pub input: AgentInput,
     pub tenant: Option<Tenant>,
@@ -45,3 +46,11 @@ pub struct AgentOutput {
     pub sources: Vec<String>,
     pub cached: bool,
 }
+
+use jigs::{Request, Response};
+
+#[derive(Clone, Request)]
+pub struct CtxReq(pub Ctx);
+
+#[derive(Clone, Response)]
+pub struct AgentResult(pub Result<AgentOutput, String>);

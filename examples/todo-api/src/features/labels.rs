@@ -1,54 +1,33 @@
 use crate::features::auth;
 use crate::http::HttpResponse;
-use crate::store::{Label, Store};
-use crate::types::{json_err, path_segments, Authed, Raw};
+use crate::types::{
+    json_err, path_segments, AuthedReq, HttpResp, LabelLookup, LabelLookupReq, LabelUpdate,
+    LabelUpdateReq, ManyLabels, ManyLabelsReq, NewLabel, NewLabelReq, OneLabel, OneLabelReq, Raw,
+    RawReq, Removed, RemovedReq,
+};
 use jigs::{fork, jig, Branch, Request, Response};
 use serde::Deserialize;
-use std::sync::Arc;
 
 #[derive(Deserialize)]
 struct LabelDto {
     name: String,
 }
 
-struct NewLabel {
-    user_id: u64,
-    store: Arc<Store>,
-    name: String,
+fn bad(msg: String) -> HttpResp {
+    HttpResp::ok(HttpResponse::bad_request(msg))
 }
 
-struct LabelLookup {
-    user_id: u64,
-    store: Arc<Store>,
-    id: u64,
-}
-
-struct LabelUpdate {
-    user_id: u64,
-    store: Arc<Store>,
-    id: u64,
-    name: String,
-}
-
-struct OneLabel(Label);
-struct ManyLabels(Vec<Label>);
-struct Removed;
-
-fn bad(msg: String) -> Response<HttpResponse> {
-    Response::ok(HttpResponse::bad_request(msg))
-}
-
-fn missing() -> Response<HttpResponse> {
-    Response::ok(HttpResponse::not_found(json_err("label not found")))
+fn missing() -> HttpResp {
+    HttpResp::ok(HttpResponse::not_found(json_err("label not found")))
 }
 
 #[jig]
-fn parse_new_label(req: Request<Authed>) -> Branch<NewLabel, HttpResponse> {
+fn parse_new_label(req: AuthedReq) -> Branch<NewLabelReq, HttpResp> {
     let dto: LabelDto = match serde_json::from_str(&req.0.body) {
         Ok(d) => d,
         Err(e) => return Branch::Done(bad(json_err(&e.to_string()))),
     };
-    Branch::Continue(Request(NewLabel {
+    Branch::Continue(NewLabelReq(NewLabel {
         user_id: req.0.user_id,
         store: req.0.store,
         name: dto.name,
@@ -56,10 +35,10 @@ fn parse_new_label(req: Request<Authed>) -> Branch<NewLabel, HttpResponse> {
 }
 
 #[jig]
-fn parse_label_id(req: Request<Authed>) -> Branch<LabelLookup, HttpResponse> {
+fn parse_label_id(req: AuthedReq) -> Branch<LabelLookupReq, HttpResp> {
     let segs = path_segments(&req.0.path);
     match segs.get(1).and_then(|s| s.parse::<u64>().ok()) {
-        Some(id) => Branch::Continue(Request(LabelLookup {
+        Some(id) => Branch::Continue(LabelLookupReq(LabelLookup {
             user_id: req.0.user_id,
             store: req.0.store,
             id,
@@ -69,7 +48,7 @@ fn parse_label_id(req: Request<Authed>) -> Branch<LabelLookup, HttpResponse> {
 }
 
 #[jig]
-fn parse_label_update(req: Request<Authed>) -> Branch<LabelUpdate, HttpResponse> {
+fn parse_label_update(req: AuthedReq) -> Branch<LabelUpdateReq, HttpResp> {
     let dto: LabelDto = match serde_json::from_str(&req.0.body) {
         Ok(d) => d,
         Err(e) => return Branch::Done(bad(json_err(&e.to_string()))),
@@ -78,7 +57,7 @@ fn parse_label_update(req: Request<Authed>) -> Branch<LabelUpdate, HttpResponse>
     let Some(id) = segs.get(1).and_then(|s| s.parse::<u64>().ok()) else {
         return Branch::Done(bad(json_err("invalid label id")));
     };
-    Branch::Continue(Request(LabelUpdate {
+    Branch::Continue(LabelUpdateReq(LabelUpdate {
         user_id: req.0.user_id,
         store: req.0.store,
         id,
@@ -87,22 +66,22 @@ fn parse_label_update(req: Request<Authed>) -> Branch<LabelUpdate, HttpResponse>
 }
 
 #[jig]
-fn load_labels(req: Request<Authed>) -> Request<ManyLabels> {
-    Request(ManyLabels(req.0.store.list_labels(req.0.user_id)))
+fn load_labels(req: AuthedReq) -> ManyLabelsReq {
+    ManyLabelsReq(ManyLabels(req.0.store.list_labels(req.0.user_id)))
 }
 
 #[jig]
-fn insert_label(req: Request<NewLabel>) -> Request<OneLabel> {
+fn insert_label(req: NewLabelReq) -> OneLabelReq {
     let NewLabel {
         user_id,
         store,
         name,
     } = req.0;
-    Request(OneLabel(store.create_label(user_id, name)))
+    OneLabelReq(OneLabel(store.create_label(user_id, name)))
 }
 
 #[jig]
-fn apply_label_update(req: Request<LabelUpdate>) -> Branch<OneLabel, HttpResponse> {
+fn apply_label_update(req: LabelUpdateReq) -> Branch<OneLabelReq, HttpResp> {
     let LabelUpdate {
         user_id,
         store,
@@ -110,47 +89,47 @@ fn apply_label_update(req: Request<LabelUpdate>) -> Branch<OneLabel, HttpRespons
         name,
     } = req.0;
     match store.update_label(user_id, id, name) {
-        Some(l) => Branch::Continue(Request(OneLabel(l))),
+        Some(l) => Branch::Continue(OneLabelReq(OneLabel(l))),
         None => Branch::Done(missing()),
     }
 }
 
 #[jig]
-fn remove_label(req: Request<LabelLookup>) -> Branch<Removed, HttpResponse> {
+fn remove_label(req: LabelLookupReq) -> Branch<RemovedReq, HttpResp> {
     if req.0.store.delete_label(req.0.user_id, req.0.id) {
-        Branch::Continue(Request(Removed))
+        Branch::Continue(RemovedReq(Removed))
     } else {
         Branch::Done(missing())
     }
 }
 
 #[jig]
-fn render_one_label(req: Request<OneLabel>) -> Response<HttpResponse> {
-    Response::ok(HttpResponse::ok(serde_json::to_string(&req.0 .0).unwrap()))
+fn render_one_label(req: OneLabelReq) -> HttpResp {
+    HttpResp::ok(HttpResponse::ok(serde_json::to_string(&req.0 .0).unwrap()))
 }
 
 #[jig]
-fn render_one_label_created(req: Request<OneLabel>) -> Response<HttpResponse> {
-    Response::ok(HttpResponse::created(
+fn render_one_label_created(req: OneLabelReq) -> HttpResp {
+    HttpResp::ok(HttpResponse::created(
         serde_json::to_string(&req.0 .0).unwrap(),
     ))
 }
 
 #[jig]
-fn render_many_labels(req: Request<ManyLabels>) -> Response<HttpResponse> {
-    Response::ok(HttpResponse::ok(serde_json::to_string(&req.0 .0).unwrap()))
+fn render_many_labels(req: ManyLabelsReq) -> HttpResp {
+    HttpResp::ok(HttpResponse::ok(serde_json::to_string(&req.0 .0).unwrap()))
 }
 
 #[jig]
-fn render_label_removed(_req: Request<Removed>) -> Response<HttpResponse> {
-    Response::ok(HttpResponse::no_content())
+fn render_label_removed(_req: RemovedReq) -> HttpResp {
+    HttpResp::ok(HttpResponse::no_content())
 }
 
 fn is_list_labels(r: &Raw) -> bool {
     r.method == "GET" && r.path == "/labels"
 }
 #[jig]
-fn list_labels(req: Request<Raw>) -> Response<HttpResponse> {
+fn list_labels(req: RawReq) -> HttpResp {
     req.then(auth::authenticate)
         .then(load_labels)
         .then(render_many_labels)
@@ -160,7 +139,7 @@ fn is_create_label(r: &Raw) -> bool {
     r.method == "POST" && r.path == "/labels"
 }
 #[jig]
-fn create_label(req: Request<Raw>) -> Response<HttpResponse> {
+fn create_label(req: RawReq) -> HttpResp {
     req.then(auth::authenticate)
         .then(parse_new_label)
         .then(insert_label)
@@ -172,7 +151,7 @@ fn is_update_label(r: &Raw) -> bool {
     r.method == "PUT" && s.len() == 2 && s[0] == "labels"
 }
 #[jig]
-fn update_label(req: Request<Raw>) -> Response<HttpResponse> {
+fn update_label(req: RawReq) -> HttpResp {
     req.then(auth::authenticate)
         .then(parse_label_update)
         .then(apply_label_update)
@@ -184,7 +163,7 @@ fn is_delete_label(r: &Raw) -> bool {
     r.method == "DELETE" && s.len() == 2 && s[0] == "labels"
 }
 #[jig]
-fn delete_label(req: Request<Raw>) -> Response<HttpResponse> {
+fn delete_label(req: RawReq) -> HttpResp {
     req.then(auth::authenticate)
         .then(parse_label_id)
         .then(remove_label)
@@ -192,7 +171,7 @@ fn delete_label(req: Request<Raw>) -> Response<HttpResponse> {
 }
 
 #[jig]
-pub fn labels(req: Request<Raw>) -> Response<HttpResponse> {
+pub fn labels(req: RawReq) -> HttpResp {
     fork!(req,
         is_list_labels   => list_labels,
         is_create_label  => create_label,

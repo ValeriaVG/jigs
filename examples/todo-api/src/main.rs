@@ -7,8 +7,7 @@ mod types;
 use crate::http::{read_request, write_response, HttpRequest, HttpResponse};
 use crate::pipeline::{all_jigs, handle};
 use crate::store::Store;
-use crate::types::Raw;
-use jigs::Request;
+use crate::types::{Raw, RawReq};
 use std::net::TcpListener;
 use std::sync::Arc;
 use std::thread;
@@ -67,8 +66,8 @@ fn main() -> std::io::Result<()> {
                     return;
                 }
             };
-            let response = handle(Request(into_raw(request, store)));
-            let body = match response.inner {
+            let response = handle(RawReq(into_raw(request, store)));
+            let body = match response.0 {
                 Ok(r) => r,
                 Err(msg) => HttpResponse {
                     status: 500,

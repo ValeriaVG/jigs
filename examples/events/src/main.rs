@@ -4,7 +4,7 @@ mod types;
 
 use crate::pipeline::{all_jigs, handle};
 use crate::types::RawEvent;
-use jigs::Request;
+use crate::types::RawReq;
 use std::collections::HashMap;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -76,7 +76,7 @@ fn main() {
     ];
 
     for ev in events {
-        let _ = handle(Request(ev));
+        let _ = handle(RawReq(ev));
     }
 
     let entries = jigs::trace::take();

@@ -2,24 +2,30 @@ use std::ffi::c_char;
 
 use jigs::{jig, jigs, Request, Response};
 
+#[derive(Clone, Request)]
+pub struct BytesReq(pub Vec<u8>);
+
+#[derive(Clone, Request)]
+pub struct TextReq(pub String);
+
+#[derive(Clone, Response)]
+pub struct TextResp(pub Result<String, String>);
+
 #[jig]
-fn decode(req: Request<Vec<u8>>) -> Request<String> {
-    Response::ok(String::from_utf8_lossy(&req.0).into())
-        .inner
-        .map(Request)
-        .unwrap_or(Request(String::new()))
+fn decode(req: BytesReq) -> TextReq {
+    TextReq(String::from_utf8_lossy(&req.0).into_owned())
 }
 
 #[jig]
-fn uppercase(req: Request<String>) -> Request<String> {
-    Request(req.0.to_uppercase())
+fn uppercase(req: TextReq) -> TextReq {
+    TextReq(req.0.to_uppercase())
 }
 
 #[jig]
-pub fn handle(req: Request<Vec<u8>>) -> Response<String> {
+pub fn handle(req: BytesReq) -> TextResp {
     req.then(decode)
         .then(uppercase)
-        .then(|r: Request<String>| Response::ok(r.0))
+        .then(|r: TextReq| TextResp::ok(r.0))
 }
 
 jigs!(handle);
@@ -45,8 +51,8 @@ pub extern "C" fn jigs_entry_name_len() -> usize {
 #[no_mangle]
 pub unsafe extern "C" fn jigs_run_pipeline(input: *const u8, input_len: usize) -> *mut c_char {
     let bytes = unsafe { std::slice::from_raw_parts(input, input_len) }.to_vec();
-    let response = handle(Request(bytes));
-    let s = response.inner.unwrap_or_else(|e| e);
+    let response = handle(BytesReq(bytes));
+    let s = response.0.unwrap_or_else(|e| e);
     let c_str = std::ffi::CString::new(s).unwrap();
     c_str.into_raw()
 }
@@ -72,8 +78,8 @@ mod c_api {
     #[test]
     fn entry_meta_is_correct() {
         let m = find_jig("handle").unwrap();
-        assert_eq!(m.kind, "Response");
-        assert_eq!(m.input, "Request");
+        assert_eq!(m.kind, "Other");
+        assert_eq!(m.input, "Other");
         assert!(m.chain.iter().any(|s| s.name == "decode"));
         assert!(m.chain.iter().any(|s| s.name == "uppercase"));
     }
@@ -81,7 +87,7 @@ mod c_api {
     #[cfg(test)]
     #[test]
     fn pipeline_runs_end_to_end() {
-        let response = handle(Request(vec![b'h', b'i']));
-        assert_eq!(response.inner.unwrap(), "HI");
+        let response = handle(BytesReq(vec![b'h', b'i']));
+        assert_eq!(response.0.unwrap(), "HI");
     }
 }

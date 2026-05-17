@@ -2,18 +2,18 @@
 
 ```mermaid
 flowchart TD
-  log_incoming["log_incoming<br/><i>Ctx → Ctx</i>"]
-  authenticate["authenticate<br/><i>async Ctx → Ctx</i>"]
-  require_authenticated{"require_authenticated<br/><i>Ctx → Branch<Ctx,AgentOutput></i>"}
-  input_filter{"input_filter<br/><i>Ctx → Branch<Ctx,AgentOutput></i>"}
-  lookup_cache{"lookup_cache<br/><i>async Ctx → Branch<Ctx,AgentOutput></i>"}
-  embed_query["embed_query<br/><i>async Ctx → Ctx</i>"]
-  vector_search["vector_search<br/><i>async Ctx → Ctx</i>"]
-  filter_and_rerank["filter_and_rerank<br/><i>Ctx → Ctx</i>"]
-  maybe_call_tool["maybe_call_tool<br/><i>async Ctx → Ctx</i>"]
-  generate{"generate<br/><i>async Ctx → AgentOutput</i>"}
-  pii_redact(["pii_redact<br/><i>AgentOutput → AgentOutput</i>"]])
-  log_outbound(["log_outbound<br/><i>AgentOutput → AgentOutput</i>"]])
+  log_incoming["log_incoming<br/><i>?</i>"]
+  authenticate["authenticate<br/><i>async ?</i>"]
+  require_authenticated["require_authenticated<br/><i>?</i>"]
+  input_filter["input_filter<br/><i>?</i>"]
+  lookup_cache["lookup_cache<br/><i>async ?</i>"]
+  embed_query["embed_query<br/><i>async ?</i>"]
+  vector_search["vector_search<br/><i>async ?</i>"]
+  filter_and_rerank["filter_and_rerank<br/><i>?</i>"]
+  maybe_call_tool["maybe_call_tool<br/><i>async ?</i>"]
+  generate["generate<br/><i>async ?</i>"]
+  pii_redact["pii_redact<br/><i>?</i>"]
+  log_outbound["log_outbound<br/><i>?</i>"]
 
 ingest::authenticate --> require_authenticated
 input_filter --> guard::lookup_cache

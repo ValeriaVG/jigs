@@ -14,18 +14,24 @@
 //! # Example
 //!
 //! ```
-//! use jigs::{jig, Request, Response};
+//! use jigs::{jig, jigs, Request, Response};
+//!
+//! #[derive(Clone, Request)]
+//! struct Msg(String);
+//!
+//! #[derive(Clone, Response)]
+//! struct Out(Result<String, String>);
 //!
 //! #[jig]
-//! fn validate(r: Request<u32>) -> Request<u32> { r }
+//! fn validate(r: Msg) -> Msg { r }
 //!
 //! #[jig]
-//! fn handle(r: Request<u32>) -> Response<String> {
-//!     Response::ok(format!("got {}", r.0))
+//! fn handle(r: Msg) -> Out {
+//!     Out::ok(format!("got {}", r.0))
 //! }
 //!
-//! let response = Request(42u32).then(validate).then(handle);
-//! assert_eq!(response.inner.unwrap(), "got 42");
+//! let response = Msg("42".into()).then(validate).then(handle);
+//! assert_eq!(response.0.unwrap(), "got 42");
 //! ```
 //!
 //! # Features
@@ -35,7 +41,7 @@
 
 pub use jigs_core::*;
 pub use jigs_core::{__fork_chain, fork};
-pub use jigs_macros::{jig, jigs};
+pub use jigs_macros::{jig, jigs, Request, Response};
 
 #[cfg(feature = "trace")]
 pub use jigs_trace as trace;

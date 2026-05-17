@@ -9,6 +9,7 @@ pub struct HttpRequest {
     pub body: String,
 }
 
+#[derive(Clone)]
 pub struct HttpResponse {
     pub status: u16,
     pub reason: &'static str,

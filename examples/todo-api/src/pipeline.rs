@@ -1,10 +1,10 @@
 use crate::features;
 use crate::http::HttpResponse;
-use crate::types::{json_err, Raw};
+use crate::types::{json_err, HttpResp, Raw, RawReq};
 use jigs::{fork, jig, jigs, Request, Response};
 
 #[jig]
-fn log_incoming(req: Request<Raw>) -> Request<Raw> {
+fn log_incoming(req: RawReq) -> RawReq {
     println!(
         "[t{:?}] --> {} {}",
         std::thread::current().id(),
@@ -15,13 +15,13 @@ fn log_incoming(req: Request<Raw>) -> Request<Raw> {
 }
 
 #[jig]
-pub fn not_found(_req: Request<Raw>) -> Response<HttpResponse> {
-    Response::ok(HttpResponse::not_found(json_err("not found")))
+pub fn not_found(_req: RawReq) -> HttpResp {
+    HttpResp::ok(HttpResponse::not_found(json_err("not found")))
 }
 
 #[jig]
-fn log_outbound(res: Response<HttpResponse>) -> Response<HttpResponse> {
-    if let Ok(r) = res.inner.as_ref() {
+fn log_outbound(res: HttpResp) -> HttpResp {
+    if let Ok(r) = res.0.as_ref() {
         println!(
             "[t{:?}] <-- {} {}",
             std::thread::current().id(),
@@ -33,7 +33,7 @@ fn log_outbound(res: Response<HttpResponse>) -> Response<HttpResponse> {
 }
 
 #[jig]
-fn dispatch(req: Request<Raw>) -> Response<HttpResponse> {
+fn dispatch(req: RawReq) -> HttpResp {
     fork!(req,
         |r: &Raw| r.path.starts_with("/auth/")  => features::auth::auth,
         |r: &Raw| r.path.starts_with("/todos")  => features::todos::todos,
@@ -43,7 +43,7 @@ fn dispatch(req: Request<Raw>) -> Response<HttpResponse> {
 }
 
 #[jig]
-pub fn handle(req: Request<Raw>) -> Response<HttpResponse> {
+pub fn handle(req: RawReq) -> HttpResp {
     req.then(log_incoming).then(dispatch).then(log_outbound)
 }
 

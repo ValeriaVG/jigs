@@ -1,5 +1,7 @@
+use jigs::{Request, Response};
 use std::collections::HashMap;
 
+#[derive(Clone)]
 pub struct RawEvent {
     pub event_type: String,
     pub payload: String,
@@ -8,6 +10,7 @@ pub struct RawEvent {
     pub metadata: HashMap<String, String>,
 }
 
+#[derive(Clone)]
 pub struct EventCtx {
     pub event: Event,
     pub tenant_id: u64,
@@ -43,3 +46,12 @@ pub struct EventResult {
     pub tenant_id: u64,
     pub outcome: String,
 }
+
+#[derive(Clone, Request)]
+pub struct RawReq(pub RawEvent);
+
+#[derive(Clone, Request)]
+pub struct EventReq(pub EventCtx);
+
+#[derive(Clone, Response)]
+pub struct EventResp(pub Result<EventResult, String>);

@@ -4,18 +4,24 @@ use http::{read_request, write_response, HttpRequest, HttpResponse};
 use jigs::{fork, jig, jigs, Branch, Request, Response};
 use std::net::TcpListener;
 
+#[derive(Clone, Request)]
+struct HttpReq(HttpRequest);
+
+#[derive(Clone, Response)]
+struct HttpResp(Result<HttpResponse, String>);
+
 #[jig]
-fn log_incoming(req: Request<HttpRequest>) -> Request<HttpRequest> {
+fn log_incoming(req: HttpReq) -> HttpReq {
     println!("--> {} {}", req.0.method, req.0.path);
     req
 }
 
 #[jig]
-fn only_get(req: Request<HttpRequest>) -> Branch<HttpRequest, HttpResponse> {
+fn only_get(req: HttpReq) -> Branch<HttpReq, HttpResp> {
     if req.0.method == "GET" {
         Branch::Continue(req)
     } else {
-        Branch::Done(Response::ok(HttpResponse::method_not_allowed()))
+        Branch::Done(HttpResp::ok(HttpResponse::method_not_allowed()))
     }
 }
 
@@ -23,29 +29,29 @@ fn is_root(r: &HttpRequest) -> bool {
     r.path == "/"
 }
 #[jig]
-fn root(_req: Request<HttpRequest>) -> Response<HttpResponse> {
-    Response::ok(HttpResponse::ok("hello, world\n"))
+fn root(_req: HttpReq) -> HttpResp {
+    HttpResp::ok(HttpResponse::ok("hello, world\n"))
 }
 
 fn is_hello(r: &HttpRequest) -> bool {
     r.path.strip_prefix("/hello/").is_some()
 }
 #[jig]
-fn hello(req: Request<HttpRequest>) -> Response<HttpResponse> {
+fn hello(req: HttpReq) -> HttpResp {
     let name = req.0.path.strip_prefix("/hello/").unwrap_or("");
     if name.is_empty() || name.contains('/') {
-        return Response::ok(HttpResponse::bad_request("provide a single name segment\n"));
+        return HttpResp::ok(HttpResponse::bad_request("provide a single name segment\n"));
     }
-    Response::ok(HttpResponse::ok(format!("hello, {name}\n")))
+    HttpResp::ok(HttpResponse::ok(format!("hello, {name}\n")))
 }
 
 #[jig]
-fn not_found(_req: Request<HttpRequest>) -> Response<HttpResponse> {
-    Response::ok(HttpResponse::not_found("not found\n"))
+fn not_found(_req: HttpReq) -> HttpResp {
+    HttpResp::ok(HttpResponse::not_found("not found\n"))
 }
 
 #[jig]
-fn route(req: Request<HttpRequest>) -> Response<HttpResponse> {
+fn route(req: HttpReq) -> HttpResp {
     fork!(req,
         is_root  => root,
         is_hello => hello,
@@ -54,15 +60,15 @@ fn route(req: Request<HttpRequest>) -> Response<HttpResponse> {
 }
 
 #[jig]
-fn log_outbound(res: Response<HttpResponse>) -> Response<HttpResponse> {
-    if let Ok(r) = res.inner.as_ref() {
+fn log_outbound(res: HttpResp) -> HttpResp {
+    if let Ok(r) = res.0.as_ref() {
         println!("<-- {} {}", r.status, r.reason);
     }
     res
 }
 
 #[jig]
-fn handle(request: Request<HttpRequest>) -> Response<HttpResponse> {
+fn handle(request: HttpReq) -> HttpResp {
     request
         .then(log_incoming)
         .then(only_get)
@@ -116,8 +122,8 @@ fn main() -> std::io::Result<()> {
             }
         };
 
-        let response = handle(Request(request));
-        let body = match response.inner {
+        let response = handle(HttpReq(request));
+        let body = match response.0 {
             Ok(r) => r,
             Err(msg) => HttpResponse {
                 status: 500,

@@ -1,3 +1,4 @@
+use jigs::{Request, Response};
 use std::collections::HashMap;
 
 #[derive(Clone)]
@@ -11,6 +12,7 @@ pub struct User {
     pub id: u64,
 }
 
+#[derive(Clone)]
 pub struct Ctx {
     pub input: CheckoutInput,
     pub user: Option<User>,
@@ -33,6 +35,7 @@ impl Ctx {
     }
 }
 
+#[derive(Clone)]
 pub struct OrderResult {
     pub order_id: u64,
     pub user_id: u64,
@@ -40,3 +43,9 @@ pub struct OrderResult {
     pub total_cents: u64,
     pub line_count: usize,
 }
+
+#[derive(Clone, Request)]
+pub struct CheckoutReq(pub Ctx);
+
+#[derive(Clone, Response)]
+pub struct CheckoutResp(pub Result<OrderResult, String>);

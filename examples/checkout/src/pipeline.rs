@@ -1,33 +1,33 @@
 use crate::features::{fulfillment, ingest, pricing, validation};
-use crate::types::{Ctx, OrderResult};
+use crate::types::{CheckoutReq, CheckoutResp};
 use jigs::{jig, jigs, Branch, Request, Response};
 
 #[jig]
-fn log_incoming(req: Request<Ctx>) -> Request<Ctx> {
+fn log_incoming(req: CheckoutReq) -> CheckoutReq {
     let _ = (&req.0.input.token, req.0.input.items.len());
     req
 }
 
 #[jig]
-fn log_outbound(res: Response<OrderResult>) -> Response<OrderResult> {
-    let _ = res.inner.as_ref().map(|o| o.order_id);
+fn log_outbound(res: CheckoutResp) -> CheckoutResp {
+    let _ = res.0.as_ref().map(|o| o.order_id);
     res
 }
 
 // Phase 1: log + async I/O ingestion.
 #[jig]
-async fn prepare(req: Request<Ctx>) -> Request<Ctx> {
+async fn prepare(req: CheckoutReq) -> CheckoutReq {
     req.then(log_incoming).then(ingest::ingest).await
 }
 
 // Phase 2: sync gates and pricing.
 #[jig]
-fn gate(req: Request<Ctx>) -> Branch<Ctx, OrderResult> {
+fn gate(req: CheckoutReq) -> Branch<CheckoutReq, CheckoutResp> {
     req.then(validation::validate).then(pricing::price)
 }
 
 #[jig]
-pub async fn handle(req: Request<Ctx>) -> Response<OrderResult> {
+pub async fn handle(req: CheckoutReq) -> CheckoutResp {
     let req = req.then(prepare).await;
     let priced = req.then(gate);
 

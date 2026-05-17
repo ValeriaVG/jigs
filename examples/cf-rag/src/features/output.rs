@@ -1,15 +1,13 @@
-use crate::types::AgentOutput;
+use crate::types::AgentResult;
 use jigs::{jig, Response};
 
-// Strip anything that looks like an email from the answer before it leaves.
 #[jig]
-fn pii_redact(res: Response<AgentOutput>) -> Response<AgentOutput> {
-    let Response { inner } = res;
-    let inner = inner.map(|mut o| {
+fn pii_redact(res: AgentResult) -> AgentResult {
+    let inner = res.0.map(|mut o| {
         o.answer = redact_emails(&o.answer);
         o
     });
-    Response { inner }
+    AgentResult(inner)
 }
 
 fn redact_emails(s: &str) -> String {
@@ -28,6 +26,6 @@ fn redact_emails(s: &str) -> String {
 }
 
 #[jig]
-pub fn finalize(res: Response<AgentOutput>) -> Response<AgentOutput> {
+pub fn finalize(res: AgentResult) -> AgentResult {
     res.then(pii_redact)
 }

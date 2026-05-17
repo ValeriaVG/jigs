@@ -1,25 +1,22 @@
 use crate::bindings;
-use crate::types::{AgentOutput, Ctx};
+use crate::types::{AgentOutput, AgentResult, Ctx, CtxReq};
 use jigs::{jig, Request, Response};
 
-// Simple planner: if context is thin, fall back to a fetch tool call before
-// generation. Real agents would loop; here a single optional step is enough
-// to show how an agentic step composes inside the pipeline.
 #[jig]
-async fn maybe_call_tool(req: Request<Ctx>) -> Request<Ctx> {
+async fn maybe_call_tool(req: CtxReq) -> CtxReq {
     if req.0.context.len() >= 2 {
         return req;
     }
     let url = format!("https://search.example/?q={}", req.0.input.query);
     let tool_output = Some(bindings::fetch_tool(&url).await);
-    Request(Ctx {
+    CtxReq(Ctx {
         tool_output,
         ..req.0
     })
 }
 
 #[jig]
-async fn generate(req: Request<Ctx>) -> Response<AgentOutput> {
+async fn generate(req: CtxReq) -> AgentResult {
     let tenant = req.0.tenant.expect("guard");
     let mut prompt = req.0.input.query.clone();
     if let Some(t) = req.0.tool_output.as_ref() {
@@ -39,10 +36,10 @@ async fn generate(req: Request<Ctx>) -> Response<AgentOutput> {
         out.clone(),
     )
     .await;
-    Response::ok(out)
+    AgentResult::ok(out)
 }
 
 #[jig]
-pub async fn run(req: Request<Ctx>) -> Response<AgentOutput> {
+pub async fn run(req: CtxReq) -> AgentResult {
     req.then(maybe_call_tool).then(generate).await
 }

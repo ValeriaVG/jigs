@@ -1,27 +1,27 @@
 # jigs
 
-A Rust request-to-response pipeline framework. Functions annotated with `#[jig]` compose into a compile-time graph via `.then()` chaining.
+A Rust pipeline framework. Functions annotated with `#[jig]` compose into a compile-time graph via `.then()` chaining.
 
 ## Core Types
 
-- `Request<T>` — inbound payload wrapper; advanced via `.then(jig)`
-- `Response<T>` — wraps `Result<T, String>`; errors always flow through response-side jigs (finalizers always run)
-- `Branch<Req, Resp>` — `Continue(Request<Req>)` or `Done(Response<Resp>)`; guards that short-circuit
-- `Pending<F>` — wraps async futures; `#[jig]` on `async fn` rewrites the signature to return this
+- `Request` trait — inbound payload; advanced via `.then(jig)`. Implemented by user-defined types via `#[derive(Request)]`.
+- `Response` trait — outbound result; errors always flow through response-side jigs (finalizers always run). Implemented by user-defined types via `#[derive(Response)]`.
+- `Branch<Req, Resp>` — `Continue(Req)` or `Done(Resp)`; guards that short-circuit. Requires `Req: Request` and `Resp: Response`.
+- `Pending<F>` — wraps async futures; `#[jig]` on `async fn` rewrites the signature to return this.
 
 ## Four Jig Kinds
 
 | Kind | Signature | What `.then()` accepts it |
 |------|-----------|--------------------------|
-| Enrich | `Request<A> -> Request<B>` | After `Request`, after `Branch::Continue` |
-| Handler | `Request<A> -> Response<B>` | After `Request`, after `Branch::Continue` |
-| Guard | `Request<A> -> Branch<B, C>` | After `Request`, after `Branch::Continue` |
-| Post-process | `Response<A> -> Response<B>` | After `Response` (always runs, even on errors) |
+| Enrich | `impl Request -> impl Request` | After `Request`, after `Branch::Continue` |
+| Handler | `impl Request -> impl Response` | After `Request`, after `Branch::Continue` |
+| Guard | `impl Request -> Branch<NewReq, Resp>` | After `Request`, after `Branch::Continue` |
+| Post-process | `impl Response -> impl Response` | After `Response` (always runs, even on errors) |
 
 ## Chaining Rules
 
-- `Request<T>.then(jig)` — jig can return `Request`, `Response`, or `Branch`
-- `Response<T>.then(jig)` — jig must return `Response<U>`; always runs, even on errors
+- `RequestType.then(jig)` — jig can return `Request`, `Response`, or `Branch`
+- `ResponseType.then(jig)` — jig must return `Response<U>`; always runs, even on errors
 - `Branch<Req, Resp>.then(jig)` — if `Continue`, runs jig and merges; if `Done`, propagates without running jig
   - jig returns `Request<New>` -> result is `Branch<New, Resp>`
   - jig returns `Response` -> result is `Response` (both branches collapse)
@@ -48,6 +48,20 @@ fork!(req,
 )
 ```
 
+### Derive Macros
+
+#### `#[derive(Request)]`
+Derives the `Request` trait for a struct. Supports:
+- Single-field tuple structs: `struct MyReq(MyPayload)`
+- Single-field named structs: `struct MyReq { payload: MyPayload }`
+- Multi-field structs with `#[req(field = "field_name")]` to specify the payload field
+
+#### `#[derive(Response)]`
+Derives the `Response` trait for a struct or enum. Supports:
+- Single-field tuple structs wrapping `Result<T, String>`: `struct MyResp(Result<String, String>)`
+- Two-field structs with `#[resp(ok)]` and `#[resp(err)]` attributes
+- Enums with exactly two variants, marked with `#[resp(ok)]` and `#[resp(err)]`
+
 ## Conventions
 
 - **Module-qualified paths**: When a `#[jig]` fn references a jig from another module, use `features::auth::authenticate`, not a direct import. Same-module jigs can be referenced by name directly. This ensures the `__Jig_<name>` marker struct is visible to macro-generated collection code.
@@ -65,7 +79,7 @@ fork!(req,
 ## Error Handling
 
 - `Response::err("message")` for pipeline errors; errors are always `String`
-- `Response<T>.then(jig)` always runs, even on errors—finalizers always see the outcome
+- `ResponseType.then(jig)` always runs, even on errors—finalizers always see the outcome
 - Jigs that should skip on error must check `Response::is_ok()` themselves
 - Domain errors (400, 401, etc.) go inside `Response::ok(HttpResponse::bad_request(...))`; `Response::err` is for internal/unexpected failures
 - Guards short-circuit with `Branch::Done(Response::err(...))` or `Branch::Done(Response::ok(...))` for successful short-circuits (e.g., cache hits)

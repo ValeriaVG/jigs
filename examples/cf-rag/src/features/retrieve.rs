@@ -1,5 +1,5 @@
 use crate::bindings;
-use crate::types::Ctx;
+use crate::types::{Ctx, CtxReq};
 use jigs::{jig, Request};
 
 const TOP_K: usize = 5;
@@ -7,24 +7,23 @@ const MIN_SCORE: f32 = 0.55;
 const SPAM_TAG: &str = "spam";
 
 #[jig]
-async fn embed_query(req: Request<Ctx>) -> Request<Ctx> {
+async fn embed_query(req: CtxReq) -> CtxReq {
     let embedding = bindings::embed(&req.0.input.query).await;
-    Request(Ctx { embedding, ..req.0 })
+    CtxReq(Ctx { embedding, ..req.0 })
 }
 
 #[jig]
-async fn vector_search(req: Request<Ctx>) -> Request<Ctx> {
+async fn vector_search(req: CtxReq) -> CtxReq {
     let tenant_id = req.0.tenant.as_ref().expect("guard").id;
     let candidates = bindings::vector_query(&req.0.embedding, TOP_K, tenant_id).await;
-    Request(Ctx {
+    CtxReq(Ctx {
         candidates,
         ..req.0
     })
 }
 
-// Drop low-confidence and known-spam docs, keep an ordered shortlist.
 #[jig]
-fn filter_and_rerank(req: Request<Ctx>) -> Request<Ctx> {
+fn filter_and_rerank(req: CtxReq) -> CtxReq {
     let mut context: Vec<_> = req
         .0
         .candidates
@@ -38,11 +37,11 @@ fn filter_and_rerank(req: Request<Ctx>) -> Request<Ctx> {
             .unwrap_or(std::cmp::Ordering::Equal)
     });
     context.truncate(3);
-    Request(Ctx { context, ..req.0 })
+    CtxReq(Ctx { context, ..req.0 })
 }
 
 #[jig]
-pub async fn retrieve(req: Request<Ctx>) -> Request<Ctx> {
+pub async fn retrieve(req: CtxReq) -> CtxReq {
     req.then(embed_query)
         .then(vector_search)
         .await

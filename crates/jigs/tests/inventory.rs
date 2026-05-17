@@ -1,26 +1,34 @@
 use ::jigs::{jig, jigs, Branch, ChainKind, Request, Response};
 
+#[derive(Clone, Request)]
+#[allow(dead_code)]
+struct TestReq(u32);
+
+#[derive(Clone, Response)]
+#[allow(dead_code)]
+struct TestResp(Result<String, String>);
+
 #[jig]
-fn validate(req: Request<u32>) -> Request<u32> {
+fn validate(req: TestReq) -> TestReq {
     req
 }
 
 #[jig]
-fn guard(req: Request<u32>) -> Branch<u32, String> {
+fn guard(req: TestReq) -> Branch<TestReq, TestResp> {
     if req.0 > 0 {
         Branch::Continue(req)
     } else {
-        Branch::Done(Response::ok("zero".into()))
+        Branch::Done(TestResp::ok("zero".into()))
     }
 }
 
 #[jig]
-fn finalize(_req: Request<u32>) -> Response<String> {
-    Response::ok("done".into())
+fn finalize(_req: TestReq) -> TestResp {
+    TestResp::ok("done".into())
 }
 
 #[jig]
-fn entry(req: Request<u32>) -> Response<String> {
+fn entry(req: TestReq) -> TestResp {
     req.then(validate).then(guard).then(finalize)
 }
 
@@ -45,24 +53,24 @@ fn macro_records_chain_in_textual_order() {
 
 #[test]
 fn macro_records_return_kind() {
-    assert_eq!(find_jig("validate").unwrap().kind, "Request");
+    assert_eq!(find_jig("validate").unwrap().kind, "Other");
     assert_eq!(find_jig("guard").unwrap().kind, "Branch");
-    assert_eq!(find_jig("finalize").unwrap().kind, "Response");
+    assert_eq!(find_jig("finalize").unwrap().kind, "Other");
 }
 
 #[test]
 fn macro_records_payload_types() {
     let validate = find_jig("validate").unwrap();
-    assert_eq!(validate.input_type, "u32");
-    assert_eq!(validate.output_type, "u32");
+    assert_eq!(validate.input_type, "TestReq");
+    assert_eq!(validate.output_type, "TestReq");
 
     let guard_meta = find_jig("guard").unwrap();
-    assert_eq!(guard_meta.input_type, "u32");
-    assert_eq!(guard_meta.output_type, "Branch<u32,String>");
+    assert_eq!(guard_meta.input_type, "TestReq");
+    assert_eq!(guard_meta.output_type, "Branch<TestReq,TestResp>");
 
     let finalize = find_jig("finalize").unwrap();
-    assert_eq!(finalize.input_type, "u32");
-    assert_eq!(finalize.output_type, "String");
+    assert_eq!(finalize.input_type, "TestReq");
+    assert_eq!(finalize.output_type, "TestResp");
 }
 
 #[test]

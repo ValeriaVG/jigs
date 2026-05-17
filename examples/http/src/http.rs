@@ -1,11 +1,13 @@
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::TcpStream;
 
+#[derive(Clone)]
 pub struct HttpRequest {
     pub method: String,
     pub path: String,
 }
 
+#[derive(Clone)]
 pub struct HttpResponse {
     pub status: u16,
     pub reason: &'static str,

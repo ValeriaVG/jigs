@@ -1,77 +1,183 @@
 use super::*;
 
+// ---- Custom request / response types used by all tests ----
+
+#[derive(Debug, Clone, PartialEq)]
+struct ReqI32(i32);
+
+impl Request for ReqI32 {
+    type Payload = i32;
+    fn payload(&self) -> &i32 {
+        &self.0
+    }
+    fn into_payload(self) -> i32 {
+        self.0
+    }
+    fn from_payload(payload: i32) -> Self {
+        ReqI32(payload)
+    }
+}
+
+impl Step for ReqI32 {
+    type Out = ReqI32;
+    type Fut = std::future::Ready<ReqI32>;
+    fn into_step(self) -> Self::Fut {
+        std::future::ready(self)
+    }
+}
+
+impl<R: Response> Merge<R> for ReqI32 {
+    type Merged = Branch<ReqI32, R>;
+    fn into_continue(self) -> Self::Merged {
+        Branch::Continue(self)
+    }
+    fn from_done(resp: R) -> Self::Merged {
+        Branch::Done(resp)
+    }
+}
+
+impl Status for ReqI32 {
+    fn succeeded(&self) -> bool {
+        true
+    }
+    fn error(&self) -> Option<String> {
+        None
+    }
+}
+
+#[derive(Debug, Clone)]
+struct RespString(Result<String, String>);
+
+impl RespString {
+    fn ok(v: String) -> Self {
+        RespString(Ok(v))
+    }
+    fn err(msg: impl Into<String>) -> Self {
+        RespString(Err(msg.into()))
+    }
+}
+
+impl Response for RespString {
+    type Payload = String;
+    fn ok(payload: String) -> Self {
+        RespString::ok(payload)
+    }
+    fn err(msg: impl Into<String>) -> Self {
+        RespString::err(msg)
+    }
+    fn is_ok(&self) -> bool {
+        self.0.is_ok()
+    }
+    fn into_result(self) -> Result<String, String> {
+        self.0
+    }
+    fn error_msg(&self) -> Option<String> {
+        match &self.0 {
+            Ok(_) => None,
+            Err(e) => Some(e.clone()),
+        }
+    }
+}
+
+impl Step for RespString {
+    type Out = RespString;
+    type Fut = std::future::Ready<RespString>;
+    fn into_step(self) -> Self::Fut {
+        std::future::ready(self)
+    }
+}
+
+impl Merge<RespString> for RespString {
+    type Merged = RespString;
+    fn into_continue(self) -> Self::Merged {
+        self
+    }
+    fn from_done(resp: RespString) -> Self::Merged {
+        resp
+    }
+}
+
+impl Status for RespString {
+    fn succeeded(&self) -> bool {
+        self.is_ok()
+    }
+    fn error(&self) -> Option<String> {
+        self.error_msg()
+    }
+}
+
 #[test]
 fn request_to_request_jig_keeps_request_type() {
-    fn enrich(r: Request<i32>) -> Request<i32> {
-        Request(r.0 + 1)
+    fn enrich(r: ReqI32) -> ReqI32 {
+        ReqI32(r.0 + 1)
     }
-    let out: Request<i32> = Request(1).then(enrich);
+    let out: ReqI32 = ReqI32(1).then(enrich);
     assert_eq!(out.0, 2);
 }
 
 #[test]
 fn request_to_response_jig_switches_to_response() {
-    fn handle(r: Request<i32>) -> Response<String> {
-        Response::ok(format!("got {}", r.0))
+    fn handle(r: ReqI32) -> RespString {
+        RespString::ok(format!("got {}", r.0))
     }
-    let out = Request(7).then(handle);
-    assert_eq!(out.inner.unwrap(), "got 7");
+    let out = ReqI32(7).then(handle);
+    assert_eq!(out.into_result().unwrap(), "got 7");
 }
 
 #[test]
 fn response_to_response_jig_keeps_response_type() {
-    fn shout(r: Response<String>) -> Response<String> {
-        Response::ok(r.inner.unwrap().to_uppercase())
+    fn shout(r: RespString) -> RespString {
+        RespString::ok(r.into_result().unwrap().to_uppercase())
     }
-    let out = Response::ok("hi".to_string()).then(shout);
-    assert_eq!(out.inner.unwrap(), "HI");
+    let out = RespString::ok("hi".to_string()).then(shout);
+    assert_eq!(out.into_result().unwrap(), "HI");
 }
 
 #[test]
 fn errored_response_still_runs_downstream_jigs() {
-    fn observe(r: Response<String>) -> Response<String> {
+    fn observe(r: RespString) -> RespString {
         assert!(r.is_err());
         r
     }
-    let out = Response::<String>::err("boom").then(observe);
-    assert_eq!(out.inner.unwrap_err(), "boom");
+    let out = RespString::err("boom").then(observe);
+    assert_eq!(out.into_result().unwrap_err(), "boom");
 }
 
 #[test]
 fn response_jig_can_recover_from_error() {
-    fn recover(r: Response<String>) -> Response<String> {
+    fn recover(r: RespString) -> RespString {
         if r.is_err() {
-            Response::ok("fallback".to_string())
+            RespString::ok("fallback".to_string())
         } else {
             r
         }
     }
-    let out = Response::<String>::err("boom").then(recover);
-    assert_eq!(out.inner.unwrap(), "fallback");
+    let out = RespString::err("boom").then(recover);
+    assert_eq!(out.into_result().unwrap(), "fallback");
 }
 
 #[test]
 fn branch_continue_runs_next_jig() {
-    fn guard(r: Request<i32>) -> Branch<i32, String> {
+    fn guard(r: ReqI32) -> Branch<ReqI32, RespString> {
         Branch::Continue(r)
     }
-    fn handle(r: Request<i32>) -> Response<String> {
-        Response::ok(format!("v={}", r.0))
+    fn handle(r: ReqI32) -> RespString {
+        RespString::ok(format!("v={}", r.0))
     }
-    let out = Request(3).then(guard).then(handle);
-    assert_eq!(out.inner.unwrap(), "v=3");
+    let out = ReqI32(3).then(guard).then(handle);
+    assert_eq!(out.into_result().unwrap(), "v=3");
 }
 
 #[test]
 fn branch_done_short_circuits_to_response() {
-    fn guard(_: Request<i32>) -> Branch<i32, String> {
-        Branch::Done(Response::err("rejected"))
+    fn guard(_: ReqI32) -> Branch<ReqI32, RespString> {
+        Branch::Done(RespString::err("rejected"))
     }
-    fn never_called(_: Request<i32>) -> Response<String> {
-        panic!("should not run");
+    fn never_called(_: ReqI32) -> RespString {
+        panic!("should not run")
     }
-    let out = Request(3).then(guard).then(never_called);
-    assert_eq!(out.inner.unwrap_err(), "rejected");
+    let out = ReqI32(3).then(guard).then(never_called);
+    assert_eq!(out.into_result().unwrap_err(), "rejected");
 }
 
 fn block_on<F: std::future::Future>(mut fut: F) -> F::Output {
@@ -95,97 +201,215 @@ fn block_on<F: std::future::Future>(mut fut: F) -> F::Output {
 }
 
 // Mirror the macro's async expansion by hand to keep tests dep-free.
-fn enrich(r: Request<i32>) -> Pending<impl std::future::Future<Output = Request<i32>>> {
-    Pending(async move { Request(r.0 + 1) })
+fn enrich_async(r: ReqI32) -> Pending<impl std::future::Future<Output = ReqI32>> {
+    Pending(async move { ReqI32(r.0 + 1) })
 }
 
-fn handle(r: Request<i32>) -> Pending<impl std::future::Future<Output = Response<String>>> {
-    Pending(async move { Response::ok(format!("got {}", r.0)) })
+fn handle_async(r: ReqI32) -> Pending<impl std::future::Future<Output = RespString>> {
+    Pending(async move { RespString::ok(format!("got {}", r.0)) })
 }
 
 #[test]
 fn async_then_chains_with_sync_then() {
     let out = block_on(async {
-        Request(1)
-            .then(enrich)
-            .then(|r: Request<i32>| Request(r.0 + 10))
-            .then(handle)
+        ReqI32(1)
+            .then(enrich_async)
+            .then(|r: ReqI32| ReqI32(r.0 + 10))
+            .then(handle_async)
             .await
     });
-    assert_eq!(out.inner.unwrap(), "got 12");
+    assert_eq!(out.into_result().unwrap(), "got 12");
 }
 
 #[test]
 fn pending_threads_value_through_sync_jig() {
-    fn shout(r: Response<String>) -> Response<String> {
-        Response::ok(r.inner.unwrap().to_uppercase())
+    fn shout(r: RespString) -> RespString {
+        RespString::ok(r.into_result().unwrap().to_uppercase())
     }
-    let out = block_on(async { Request(7).then(handle).then(shout).await });
-    assert_eq!(out.inner.unwrap(), "GOT 7");
+    let out = block_on(async { ReqI32(7).then(handle_async).then(shout).await });
+    assert_eq!(out.into_result().unwrap(), "GOT 7");
 }
 
 #[test]
 fn fork_picks_first_matching_arm() {
-    fn even(r: Request<i32>) -> Response<String> {
-        Response::ok(format!("even {}", r.0))
+    fn even(r: ReqI32) -> RespString {
+        RespString::ok(format!("even {}", r.0))
     }
-    fn small(r: Request<i32>) -> Response<String> {
-        Response::ok(format!("small {}", r.0))
+    fn small(r: ReqI32) -> RespString {
+        RespString::ok(format!("small {}", r.0))
     }
-    fn fallback(r: Request<i32>) -> Response<String> {
-        Response::ok(format!("fallback {}", r.0))
+    fn fallback(r: ReqI32) -> RespString {
+        RespString::ok(format!("fallback {}", r.0))
     }
-    let out = crate::fork!(Request(4),
+    let out = crate::fork!(ReqI32(4),
         |n: &i32| *n % 2 == 0 => even,
         |n: &i32| *n < 100    => small,
         _ => fallback,
     );
-    assert_eq!(out.inner.unwrap(), "even 4");
+    assert_eq!(out.into_result().unwrap(), "even 4");
 }
 
 #[test]
 fn fork_falls_through_to_default() {
-    fn never(_: Request<i32>) -> Response<String> {
+    fn never(_: ReqI32) -> RespString {
         panic!("should not run")
     }
-    fn fallback(r: Request<i32>) -> Response<String> {
-        Response::ok(format!("got {}", r.0))
+    fn fallback(r: ReqI32) -> RespString {
+        RespString::ok(format!("got {}", r.0))
     }
-    let out = crate::fork!(Request(3),
+    let out = crate::fork!(ReqI32(3),
         |n: &i32| *n > 100 => never,
         |n: &i32| *n < 0   => never,
         _ => fallback,
     );
-    assert_eq!(out.inner.unwrap(), "got 3");
+    assert_eq!(out.into_result().unwrap(), "got 3");
 }
 
 #[test]
 fn fork_later_arms_are_skipped_after_match() {
-    fn first(_: Request<i32>) -> Response<String> {
-        Response::ok("first".into())
+    fn first(_: ReqI32) -> RespString {
+        RespString::ok("first".into())
     }
-    fn second(_: Request<i32>) -> Response<String> {
+    fn second(_: ReqI32) -> RespString {
         panic!("should not run after match")
     }
-    let out = crate::fork!(Request(1),
+    let out = crate::fork!(ReqI32(1),
         |_: &i32| true => first,
         |_: &i32| true => second,
         _ => second,
     );
-    assert_eq!(out.inner.unwrap(), "first");
+    assert_eq!(out.into_result().unwrap(), "first");
 }
 
 #[test]
 fn branch_then_req_to_req_stays_in_branch() {
-    fn guard(r: Request<i32>) -> Branch<i32, String> {
+    fn guard(r: ReqI32) -> Branch<ReqI32, RespString> {
         Branch::Continue(r)
     }
-    fn bump(r: Request<i32>) -> Request<i32> {
-        Request(r.0 + 10)
+    fn bump(r: ReqI32) -> ReqI32 {
+        ReqI32(r.0 + 10)
     }
-    let out = Request(5).then(guard).then(bump);
+    let out = ReqI32(5).then(guard).then(bump);
     match out {
         Branch::Continue(r) => assert_eq!(r.0, 15),
         Branch::Done(_) => panic!("expected Continue"),
     }
+}
+
+#[test]
+fn custom_request_implements_request_trait() {
+    #[derive(Debug, PartialEq)]
+    struct MyPayload(i32);
+
+    struct MyReq(MyPayload);
+
+    impl Request for MyReq {
+        type Payload = MyPayload;
+        fn payload(&self) -> &MyPayload {
+            &self.0
+        }
+        fn into_payload(self) -> MyPayload {
+            self.0
+        }
+        fn from_payload(payload: MyPayload) -> Self {
+            MyReq(payload)
+        }
+    }
+
+    impl Merge<RespString> for MyReq {
+        type Merged = Branch<MyReq, RespString>;
+        fn into_continue(self) -> Self::Merged {
+            Branch::Continue(self)
+        }
+        fn from_done(resp: RespString) -> Self::Merged {
+            Branch::Done(resp)
+        }
+    }
+    impl Status for MyReq {
+        fn succeeded(&self) -> bool {
+            true
+        }
+        fn error(&self) -> Option<String> {
+            None
+        }
+    }
+
+    fn enrich(r: MyReq) -> MyReq {
+        MyReq(MyPayload(r.0 .0 + 1))
+    }
+
+    let out = MyReq(MyPayload(1)).then(enrich);
+    assert_eq!(out.0, MyPayload(2));
+}
+
+#[test]
+fn custom_response_implements_response_trait() {
+    struct MyResp {
+        ok: bool,
+        value: String,
+    }
+
+    impl Response for MyResp {
+        type Payload = String;
+        fn ok(payload: String) -> Self {
+            MyResp {
+                ok: true,
+                value: payload,
+            }
+        }
+        fn err(msg: impl Into<String>) -> Self {
+            MyResp {
+                ok: false,
+                value: msg.into(),
+            }
+        }
+        fn is_ok(&self) -> bool {
+            self.ok
+        }
+        fn into_result(self) -> Result<String, String> {
+            if self.ok {
+                Ok(self.value)
+            } else {
+                Err(self.value)
+            }
+        }
+        fn error_msg(&self) -> Option<String> {
+            if self.ok {
+                None
+            } else {
+                Some(self.value.clone())
+            }
+        }
+    }
+    impl Merge<MyResp> for MyResp {
+        type Merged = MyResp;
+        fn into_continue(self) -> Self::Merged {
+            self
+        }
+        fn from_done(resp: MyResp) -> Self::Merged {
+            resp
+        }
+    }
+    impl Status for MyResp {
+        fn succeeded(&self) -> bool {
+            self.is_ok()
+        }
+        fn error(&self) -> Option<String> {
+            self.error_msg()
+        }
+    }
+
+    fn handle(r: ReqI32) -> MyResp {
+        MyResp::ok(format!("got {}", r.0))
+    }
+    fn finalize(r: MyResp) -> MyResp {
+        if r.is_ok() {
+            MyResp::ok(format!("{} !", r.value))
+        } else {
+            r
+        }
+    }
+
+    let out = ReqI32(42).then(handle).then(finalize);
+    assert_eq!(out.into_result().unwrap(), "got 42 !");
 }

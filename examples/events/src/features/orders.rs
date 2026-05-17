@@ -1,19 +1,21 @@
-use crate::types::{Event, EventCtx, EventResult};
+use crate::types::EventReq;
+use crate::types::EventResp;
+use crate::types::{Event, EventResult};
 use jigs::{jig, Branch, Request, Response};
 
 #[jig]
-fn validate_order(req: Request<EventCtx>) -> Branch<EventCtx, EventResult> {
+fn validate_order(req: EventReq) -> Branch<EventReq, EventResp> {
     match &req.0.event {
         Event::OrderCreated {
             amount, currency, ..
         } => {
             if *amount == 0 || currency.is_empty() {
-                return Branch::Done(Response::err("invalid order payload"));
+                return Branch::Done(EventResp::err("invalid order payload"));
             }
         }
         Event::OrderUpdated { status, .. } => {
             if status.is_empty() {
-                return Branch::Done(Response::err("missing order status"));
+                return Branch::Done(EventResp::err("missing order status"));
             }
         }
         _ => return Branch::Continue(req),
@@ -22,7 +24,7 @@ fn validate_order(req: Request<EventCtx>) -> Branch<EventCtx, EventResult> {
 }
 
 #[jig]
-fn build_result(req: Request<EventCtx>) -> Response<EventResult> {
+fn build_result(req: EventReq) -> EventResp {
     let ctx = req.0;
     let outcome = match &ctx.event {
         Event::OrderCreated {
@@ -37,7 +39,7 @@ fn build_result(req: Request<EventCtx>) -> Response<EventResult> {
         }
         _ => "unknown order event".to_string(),
     };
-    Response::ok(EventResult {
+    EventResp::ok(EventResult {
         event_id: format!("{:?}", ctx.event),
         tenant_id: ctx.tenant_id,
         outcome,
@@ -45,6 +47,6 @@ fn build_result(req: Request<EventCtx>) -> Response<EventResult> {
 }
 
 #[jig]
-pub fn handle(req: Request<EventCtx>) -> Response<EventResult> {
+pub fn handle(req: EventReq) -> EventResp {
     req.then(validate_order).then(build_result)
 }

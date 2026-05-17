@@ -1,15 +1,15 @@
 use crate::store;
-use crate::types::Ctx;
+use crate::types::{CheckoutReq, Ctx};
 use jigs::{jig, Request};
 
 #[jig]
-async fn authenticate(req: Request<Ctx>) -> Request<Ctx> {
+async fn authenticate(req: CheckoutReq) -> CheckoutReq {
     let user = store::lookup_user(&req.0.input.token).await;
-    Request(Ctx { user, ..req.0 })
+    CheckoutReq(Ctx { user, ..req.0 })
 }
 
 #[jig]
-async fn load_cart(req: Request<Ctx>) -> Request<Ctx> {
+async fn load_cart(req: CheckoutReq) -> CheckoutReq {
     let lookups = req.0.input.items.iter().map(|(sku, _)| {
         let sku = sku.clone();
         async move {
@@ -26,7 +26,7 @@ async fn load_cart(req: Request<Ctx>) -> Request<Ctx> {
             prices.insert(sku, p);
         }
     }
-    Request(Ctx {
+    CheckoutReq(Ctx {
         stock,
         prices,
         ..req.0
@@ -34,6 +34,6 @@ async fn load_cart(req: Request<Ctx>) -> Request<Ctx> {
 }
 
 #[jig]
-pub async fn ingest(req: Request<Ctx>) -> Request<Ctx> {
+pub async fn ingest(req: CheckoutReq) -> CheckoutReq {
     req.then(authenticate).then(load_cart).await
 }

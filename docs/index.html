@@ -374,28 +374,34 @@ jigs!(handle);</code></pre>
     <h3>Write a pipeline</h3>
     <p>Every jig is a plain function. The type system enforces ordering: once you hold a <code>Response</code>, you can't chain a jig that expects a <code>Request</code>. Errored responses and <code>Branch::Done</code> short-circuit the rest.</p>
 
-    <pre><code class="language-rust">use jigs::{jig, Request, Response};
+    <pre><code class="language-rust">use jigs::{jig, jigs, Request, Response};
+
+#[derive(Clone, Request)]
+struct Input(u32);
+
+#[derive(Clone, Response)]
+struct Output(Result<String, String>);
 
 #[jig]
-fn validate(r: Request&lt;u32&gt;) -&gt; Request&lt;u32&gt; { r }
+fn validate(r: Input) -> Input { r }
 
 #[jig]
-fn handle(r: Request&lt;u32&gt;) -&gt; Response&lt;String&gt; {
-    Response::ok(format!("got {}", r.0))
+fn handle(r: Input) -> Output {
+    Output::ok(format!("got {}", r.0))
 }
 
 fn main() {
-    let response = Request(42u32)
+    let response = Input(42u32)
         .then(validate)
         .then(handle);
-    assert_eq!(response.inner.unwrap(), "got 42");
+    assert_eq!(response.0.unwrap(), "got 42");
 }</code></pre>
 
     <h3>Route with <code>fork!</code></h3>
     <p>First matching predicate wins. <code>_</code> is the default:</p>
 
     <pre><code class="language-rust">#[jig]
-fn route(req: Request&lt;HttpRequest&gt;) -&gt; Response&lt;String&gt; {
+fn route(req: HttpReq) -&gt; HttpResp {
     fork!(req,
         |r: &amp;HttpRequest| r.path == "/"                  =&gt; root,
         |r: &amp;HttpRequest| r.path.starts_with("/hello/")  =&gt; hello,
@@ -407,10 +413,16 @@ fn route(req: Request&lt;HttpRequest&gt;) -&gt; Response&lt;String&gt; {
     <p>Each <code>#[jig]</code> gets a marker struct that implements <code>JigDef</code>. The <code>jigs!(entry_fn)</code> macro walks the trait recursively and produces <code>all_jigs()</code> / <code>find_jig()</code>. Place it in the same module as the entry function:</p>
 
     <pre><code class="language-rust">// pipeline.rs
-use jigs::{jig, Request, Response};
+use jigs::{jig, jigs, Request, Response};
+
+#[derive(Clone, Request)]
+struct Input(u32);
+
+#[derive(Clone, Response)]
+struct Output(Result<String, String>);
 
 #[jig]
-fn handle(r: Request&lt;u32&gt;) -&gt; Response&lt;String&gt; { /* ... */ }
+fn handle(r: Input) -> Output { /* ... */ }
 
 jigs!(handle);  // generates all_jigs() and find_jig()</code></pre>
 
@@ -460,7 +472,7 @@ let response = Request(42u32)
 struct __Jig_validate;
 impl JigDef for __Jig_validate { /* ... */ }</code></pre>
 
-    <p><code>Request</code> and <code>Response</code> are generic wrappers you put your own data into. Use jigs with axum, actix-web, warp, tokio channels, Lambda handlers, CLI args, or plain function calls. Anywhere you have input that flows through steps to output.</p>
+    <p><code>Request</code> and <code>Response</code> are traits. You define your own domain types and derive them, then chain just like before. Use jigs with axum, actix-web, warp, tokio channels, Lambda handlers, CLI args, or plain function calls. Anywhere you have input that flows through steps to output.</p>
 
     <p>When a <code>#[jig]</code> function references a jig from another module, use the module-qualified path (<code>features::auth::authenticate</code>) instead of importing the function directly. Same-module jigs can be referenced by name.</p>
 

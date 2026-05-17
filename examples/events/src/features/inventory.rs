@@ -1,14 +1,16 @@
-use crate::types::{Event, EventCtx, EventResult};
+use crate::types::EventReq;
+use crate::types::EventResp;
+use crate::types::{Event, EventResult};
 use jigs::{jig, Branch, Request, Response};
 
 #[jig]
-fn validate_inventory(req: Request<EventCtx>) -> Branch<EventCtx, EventResult> {
+fn validate_inventory(req: EventReq) -> Branch<EventReq, EventResp> {
     match &req.0.event {
         Event::InventoryChanged {
             sku, warehouse_id, ..
         } => {
             if sku.is_empty() || *warehouse_id == 0 {
-                return Branch::Done(Response::err("invalid inventory payload"));
+                return Branch::Done(EventResp::err("invalid inventory payload"));
             }
         }
         _ => return Branch::Continue(req),
@@ -17,7 +19,7 @@ fn validate_inventory(req: Request<EventCtx>) -> Branch<EventCtx, EventResult> {
 }
 
 #[jig]
-fn build_result(req: Request<EventCtx>) -> Response<EventResult> {
+fn build_result(req: EventReq) -> EventResp {
     let ctx = req.0;
     let outcome = match &ctx.event {
         Event::InventoryChanged {
@@ -29,7 +31,7 @@ fn build_result(req: Request<EventCtx>) -> Response<EventResult> {
         }
         _ => "unknown inventory event".to_string(),
     };
-    Response::ok(EventResult {
+    EventResp::ok(EventResult {
         event_id: format!("{:?}", ctx.event),
         tenant_id: ctx.tenant_id,
         outcome,
@@ -37,6 +39,6 @@ fn build_result(req: Request<EventCtx>) -> Response<EventResult> {
 }
 
 #[jig]
-pub fn handle(req: Request<EventCtx>) -> Response<EventResult> {
+pub fn handle(req: EventReq) -> EventResp {
     req.then(validate_inventory).then(build_result)
 }

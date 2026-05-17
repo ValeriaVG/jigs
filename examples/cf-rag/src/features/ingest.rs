@@ -1,9 +1,9 @@
 use crate::bindings;
-use crate::types::Ctx;
-use jigs::{jig, Request};
+use crate::types::{Ctx, CtxReq};
+use jigs::jig;
 
 #[jig]
-pub async fn authenticate(req: Request<Ctx>) -> Request<Ctx> {
+pub async fn authenticate(req: CtxReq) -> CtxReq {
     let tenant = bindings::lookup_tenant(&req.0.input.api_token).await;
-    Request(Ctx { tenant, ..req.0 })
+    CtxReq(Ctx { tenant, ..req.0 })
 }

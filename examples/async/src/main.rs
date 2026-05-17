@@ -1,6 +1,7 @@
 use jigs::{jig, jigs, Branch, Request, Response};
 use std::time::Duration;
 
+#[derive(Clone)]
 struct Ctx {
     id: String,
     user: Option<String>,
@@ -17,16 +18,22 @@ async fn fetch_account(id: &str) -> u64 {
     id.bytes().map(|b| b as u64).sum()
 }
 
+#[derive(Clone, Request)]
+struct AppReq(Ctx);
+
+#[derive(Clone, Response)]
+struct AppResp(Result<String, String>);
+
 #[jig]
-fn log_incoming(req: Request<Ctx>) -> Request<Ctx> {
+fn log_incoming(req: AppReq) -> AppReq {
     println!("--> incoming id={}", req.0.id);
     req
 }
 
 #[jig]
-async fn enrich(req: Request<Ctx>) -> Request<Ctx> {
+async fn enrich(req: AppReq) -> AppReq {
     let (user, account) = tokio::join!(fetch_user(&req.0.id), fetch_account(&req.0.id));
-    Request(Ctx {
+    AppReq(Ctx {
         id: req.0.id,
         user: Some(user),
         account: Some(account),
@@ -34,25 +41,25 @@ async fn enrich(req: Request<Ctx>) -> Request<Ctx> {
 }
 
 #[jig]
-fn require_account(req: Request<Ctx>) -> Branch<Ctx, String> {
+fn require_account(req: AppReq) -> Branch<AppReq, AppResp> {
     if req.0.account.is_some() {
         Branch::Continue(req)
     } else {
-        Branch::Done(Response::err("no account"))
+        Branch::Done(AppResp::err("no account"))
     }
 }
 
 #[jig]
-fn render(req: Request<Ctx>) -> Response<String> {
+fn render(req: AppReq) -> AppResp {
     match (req.0.user, req.0.account) {
-        (Some(u), Some(a)) => Response::ok(format!("{u} balance={a}")),
-        _ => Response::err("missing fields"),
+        (Some(u), Some(a)) => AppResp::ok(format!("{u} balance={a}")),
+        _ => AppResp::err("missing fields"),
     }
 }
 
 #[jig]
-fn log_outbound(res: Response<String>) -> Response<String> {
-    match res.inner.as_ref() {
+fn log_outbound(res: AppResp) -> AppResp {
+    match &res.0 {
         Ok(body) => println!("<-- ok: {body}"),
         Err(msg) => println!("<-- err: {msg}"),
     }
@@ -60,10 +67,8 @@ fn log_outbound(res: Response<String>) -> Response<String> {
 }
 
 #[jig]
-async fn handle(req: Request<Ctx>) -> Response<String> {
-    // Async section: await collapses Pending back to a Request.
+async fn handle(req: AppReq) -> AppResp {
     let req = req.then(log_incoming).then(enrich).await;
-    // Sync section: Branch + sync handlers chain normally on top.
     req.then(require_account).then(render).then(log_outbound)
 }
 
@@ -92,7 +97,7 @@ async fn main() {
         eprintln!("wrote {html_dir}/index.html and {dir}/map.md");
         return;
     }
-    let req = Request(Ctx {
+    let req = AppReq(Ctx {
         id: "u-42".to_string(),
         user: None,
         account: None,

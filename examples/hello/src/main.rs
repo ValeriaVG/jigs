@@ -1,35 +1,41 @@
 use jigs::{jig, jigs, Branch, Request, Response};
 
+#[derive(Clone, Request)]
+struct NameReq(String);
+
+#[derive(Clone, Response)]
+struct GreetingResp(Result<String, String>);
+
 #[jig]
-fn log_incoming(req: Request<String>) -> Request<String> {
+fn log_incoming(req: NameReq) -> NameReq {
     println!("incoming: {}", req.0);
     req
 }
 
 #[jig]
-fn validate_incoming(req: Request<String>) -> Branch<String, String> {
+fn validate_incoming(req: NameReq) -> Branch<NameReq, GreetingResp> {
     if req.0.is_empty() {
-        return Branch::Done(Response::err("empty name provided"));
+        return Branch::Done(GreetingResp::err("empty name provided"));
     }
     Branch::Continue(req)
 }
 
 #[jig]
-fn greet(req: Request<String>) -> Response<String> {
-    Response::ok(format!("hello, {}", req.0))
+fn greet(req: NameReq) -> GreetingResp {
+    GreetingResp::ok(format!("hello, {}", req.0))
 }
 
 #[jig]
-fn shout(resp: Response<String>) -> Response<String> {
-    match resp.inner {
-        Ok(v) => Response::ok(v.to_uppercase()),
+fn shout(resp: GreetingResp) -> GreetingResp {
+    match resp.0 {
+        Ok(v) => GreetingResp::ok(v.to_uppercase()),
         Err(_) => resp,
     }
 }
 
 #[jig]
-fn log_outbound(res: Response<String>) -> Response<String> {
-    match res.inner.as_ref() {
+fn log_outbound(res: GreetingResp) -> GreetingResp {
+    match &res.0 {
         Ok(v) => println!("result: {v}"),
         Err(e) => println!("error: {e}"),
     }
@@ -37,7 +43,7 @@ fn log_outbound(res: Response<String>) -> Response<String> {
 }
 
 #[jig]
-fn handle(request: Request<String>) -> Response<String> {
+fn handle(request: NameReq) -> GreetingResp {
     request
         .then(log_incoming)
         .then(validate_incoming)
@@ -75,8 +81,8 @@ fn main() {
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty())
         .unwrap_or_default();
-    let response = handle(Request(name));
-    match response.inner {
+    let response = handle(NameReq(name));
+    match response.0 {
         Ok(v) => println!("{v}"),
         Err(e) => println!("ERROR: {e}"),
     }

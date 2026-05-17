@@ -2,51 +2,85 @@
 //! Core types for the `jigs` framework.
 //!
 //! A jig is one step in a request-to-response pipeline. Four kinds exist:
-//! - `Request` to `Request`            — enrich, validate, transform
-//! - `Request` to `Response`           — handler that produces a response
-//! - `Response` to `Response`          — post-process the outgoing message
-//! - `Request` to `Branch<Req, Resp>`  — guard that may short-circuit
+//! - Request -> Request            — enrich, validate, transform
+//! - Request -> Response           — handler that produces a response
+//! - Response -> Response          — post-process the outgoing message
+//! - Request -> Branch<Request, Response>  — guard that may short-circuit
 //!
 //! Pipelines are built by chaining jigs with `.then(...)`. The type system
-//! enforces ordering: once you hold a `Response`, you cannot chain a jig that
-//! expects a `Request`. `Branch::Done` and errored request-handling jigs
-//! short-circuit the request side of the pipeline, but once a `Response`
+//! enforces ordering: once you hold a [`Response`] you cannot chain a jig that
+//! expects a [`Request`]. `Branch::Done` and errored request-handling jigs
+//! short-circuit the request side of the pipeline, but once a [`Response`]
 //! exists every `Response -> Response` jig runs — including on errored
 //! responses — so finalizers (logging, headers, error envelopes) always
 //! see the outcome. Jigs that should only act on success must check
-//! `Response::is_ok` themselves.
+//! [`Response::is_ok`] themselves.
 
 pub mod meta;
 pub use meta::{ChainKind, ChainStep, JigDef, JigMeta};
 
-/// Inbound message flowing through a pipeline.
-pub struct Request<T>(pub T);
+/// An inbound message flowing through a pipeline.
+///
+/// Types implementing this trait can be chained with `.then(jig)` on the
+/// request side.
+pub trait Request: Sized {
+    /// Payload extracted from this request.
+    type Payload;
+    /// Borrow the payload.
+    fn payload(&self) -> &Self::Payload;
+    /// Consume the request and return the payload.
+    fn into_payload(self) -> Self::Payload;
+    /// Wrap a payload into a request.
+    fn from_payload(payload: Self::Payload) -> Self;
 
-/// Outbound message produced by a pipeline. Wraps a `Result` so that
-/// downstream jigs can short-circuit on error.
-pub struct Response<T> {
-    /// The wrapped value, or an error message.
-    pub inner: Result<T, String>,
+    /// Append the next jig to the pipeline.
+    fn then<J, U>(self, jig: J) -> U
+    where
+        J: Jig<Self, Out = U>,
+    {
+        jig.run(self)
+    }
 }
 
-impl<T> Response<T> {
+/// An outbound message produced by a pipeline.
+///
+/// Types implementing this trait wrap a `Result` so that downstream jigs can
+/// short-circuit on error.
+pub trait Response: Sized {
+    /// The payload carried by a successful response.
+    type Payload;
     /// Construct a successful response.
-    pub fn ok(value: T) -> Self {
-        Self { inner: Ok(value) }
-    }
+    fn ok(payload: Self::Payload) -> Self;
     /// Construct an errored response from a message.
-    pub fn err(msg: impl Into<String>) -> Self {
-        Self {
-            inner: Err(msg.into()),
+    fn err(msg: impl Into<String>) -> Self;
+    /// Returns `true` if this response carries a value.
+    fn is_ok(&self) -> bool;
+    /// Returns `true` if this response carries an error.
+    fn is_err(&self) -> bool {
+        !self.is_ok()
+    }
+    /// Convert into an owned `Result`.
+    fn into_result(self) -> Result<Self::Payload, String>;
+    /// Wrap a `Result` into a response.
+    fn from_result(result: Result<Self::Payload, String>) -> Self {
+        match result {
+            Ok(v) => Self::ok(v),
+            Err(e) => Self::err(e),
         }
     }
-    /// Returns `true` if this response carries a value.
-    pub fn is_ok(&self) -> bool {
-        self.inner.is_ok()
+    /// Non-consuming access to the error message, if this is an error.
+    fn error_msg(&self) -> Option<String> {
+        None
     }
-    /// Returns `true` if this response carries an error.
-    pub fn is_err(&self) -> bool {
-        self.inner.is_err()
+
+    /// Append a `Response -> Response` jig. The jig always runs, including
+    /// on errored responses, so finalizers see every outcome.
+    fn then<J>(self, jig: J) -> J::Out
+    where
+        J: Jig<Self>,
+        J::Out: Response,
+    {
+        jig.run(self)
     }
 }
 
@@ -54,9 +88,9 @@ impl<T> Response<T> {
 /// request, or short-circuit the pipeline with a response.
 pub enum Branch<Req, Resp> {
     /// Continue the pipeline with this request.
-    Continue(Request<Req>),
+    Continue(Req),
     /// Stop the pipeline and return this response.
-    Done(Response<Resp>),
+    Done(Resp),
 }
 
 /// One step in a jigs pipeline. Any `Fn(In) -> Out` automatically implements
@@ -98,25 +132,13 @@ pub trait Step {
     fn into_step(self) -> Self::Fut;
 }
 
-impl<T> Step for Request<T> {
-    type Out = Request<T>;
-    type Fut = core::future::Ready<Request<T>>;
-    fn into_step(self) -> Self::Fut {
-        core::future::ready(self)
-    }
-}
-
-impl<T> Step for Response<T> {
-    type Out = Response<T>;
-    type Fut = core::future::Ready<Response<T>>;
-    fn into_step(self) -> Self::Fut {
-        core::future::ready(self)
-    }
-}
-
-impl<R, P> Step for Branch<R, P> {
-    type Out = Branch<R, P>;
-    type Fut = core::future::Ready<Branch<R, P>>;
+impl<REQ, RESP> Step for Branch<REQ, RESP>
+where
+    REQ: Request,
+    RESP: Response,
+{
+    type Out = Branch<REQ, RESP>;
+    type Fut = core::future::Ready<Branch<REQ, RESP>>;
     fn into_step(self) -> Self::Fut {
         core::future::ready(self)
     }
@@ -166,30 +188,19 @@ where
 /// knowing whether the value is a `Request`, `Response`, or `Branch`.
 pub trait Status {
     /// Returns `true` if the value represents a successful outcome.
-    fn ok(&self) -> bool;
+    fn succeeded(&self) -> bool;
     /// Error message, if any. Defaults to `None`.
     fn error(&self) -> Option<String> {
         None
     }
 }
 
-impl<T> Status for Request<T> {
-    fn ok(&self) -> bool {
-        true
-    }
-}
-
-impl<T> Status for Response<T> {
-    fn ok(&self) -> bool {
-        self.is_ok()
-    }
-    fn error(&self) -> Option<String> {
-        self.inner.as_ref().err().cloned()
-    }
-}
-
-impl<Req, Resp> Status for Branch<Req, Resp> {
-    fn ok(&self) -> bool {
+impl<REQ, RESP> Status for Branch<REQ, RESP>
+where
+    REQ: Request,
+    RESP: Response,
+{
+    fn succeeded(&self) -> bool {
         match self {
             Branch::Continue(_) => true,
             Branch::Done(r) => r.is_ok(),
@@ -198,73 +209,135 @@ impl<Req, Resp> Status for Branch<Req, Resp> {
     fn error(&self) -> Option<String> {
         match self {
             Branch::Continue(_) => None,
-            Branch::Done(r) => r.inner.as_ref().err().cloned(),
+            Branch::Done(r) => r.error_msg(),
         }
     }
 }
 
 /// Glue trait that lets a `Branch::then(jig)` accept a jig whose output is a
-/// `Request`, a `Response`, or another `Branch`, and merge the two outcomes
+/// request, a response, or another `Branch`, and merge the two outcomes
 /// into a single value.
-pub trait Merge<Resp> {
+///
+/// Implement this for custom request/response types when you need to use them
+/// after a `Branch`. See the [`impl_request!`] and [`impl_response!`]
+/// convenience macros, or derive [`Request`] / [`Response`] which generate this
+/// automatically.
+pub trait Merge<R> {
     /// Result of merging this value with the prior `Branch`.
     type Merged;
     /// Called when the previous `Branch` was `Continue`.
     fn into_continue(self) -> Self::Merged;
     /// Called when the previous `Branch` was `Done`, propagating its response.
-    fn from_done(resp: Response<Resp>) -> Self::Merged;
+    fn from_done(resp: R) -> Self::Merged;
 }
 
-impl<NewReq, Resp> Merge<Resp> for Request<NewReq> {
-    type Merged = Branch<NewReq, Resp>;
+impl<REQ, RESP> Merge<RESP> for Branch<REQ, RESP>
+where
+    REQ: Request,
+    RESP: Response,
+{
+    type Merged = Branch<REQ, RESP>;
     fn into_continue(self) -> Self::Merged {
-        Branch::Continue(self)
+        self
     }
-    fn from_done(resp: Response<Resp>) -> Self::Merged {
+    fn from_done(resp: RESP) -> Self::Merged {
         Branch::Done(resp)
     }
 }
 
-impl<Resp> Merge<Resp> for Response<Resp> {
-    type Merged = Response<Resp>;
-    fn into_continue(self) -> Self::Merged {
-        self
-    }
-    fn from_done(resp: Response<Resp>) -> Self::Merged {
-        resp
-    }
-}
-
-impl<NewReq, Resp> Merge<Resp> for Branch<NewReq, Resp> {
-    type Merged = Branch<NewReq, Resp>;
-    fn into_continue(self) -> Self::Merged {
-        self
-    }
-    fn from_done(resp: Response<Resp>) -> Self::Merged {
-        Branch::Done(resp)
-    }
-}
-
-impl<T> Request<T> {
-    /// Append the next jig to the pipeline.
-    pub fn then<J, U>(self, jig: J) -> U
+impl<REQ, RESP> Branch<REQ, RESP>
+where
+    REQ: Request,
+    RESP: Response,
+{
+    /// Append the next jig to a guarded pipeline. If the previous step was
+    /// `Done`, its response is propagated and `jig` is not run.
+    pub fn then<J, Out>(self, jig: J) -> <Out as Merge<RESP>>::Merged
     where
-        J: Jig<Request<T>, Out = U>,
+        J: Jig<REQ, Out = Out>,
+        Out: Merge<RESP>,
     {
-        jig.run(self)
+        match self {
+            Branch::Continue(r) => Out::into_continue(jig.run(r)),
+            Branch::Done(resp) => Out::from_done(resp),
+        }
     }
 }
 
-impl<T> Response<T> {
-    /// Append a `Response -> Response` jig. The jig always runs, including
-    /// on errored responses, so finalizers see every outcome. Jigs that
-    /// should only transform successful responses must check `is_ok` first.
-    pub fn then<J, U>(self, jig: J) -> Response<U>
-    where
-        J: Jig<Response<T>, Out = Response<U>>,
-    {
-        jig.run(self)
-    }
+/// Wire a custom request type into the framework.
+///
+/// Generates `Merge<R>`, `Status`, and `Step` so the type works in standard
+/// pipelines and async chains.
+///
+/// ```ignore
+/// impl_request!(MyReq);
+/// ```
+#[macro_export]
+macro_rules! impl_request {
+    ($t:ty) => {
+        impl $crate::Step for $t {
+            type Out = $t;
+            type Fut = ::core::future::Ready<$t>;
+            fn into_step(self) -> Self::Fut {
+                ::core::future::ready(self)
+            }
+        }
+        impl<R: $crate::Response> $crate::Merge<R> for $t {
+            type Merged = $crate::Branch<$t, R>;
+            fn into_continue(self) -> Self::Merged {
+                $crate::Branch::Continue(self)
+            }
+            fn from_done(resp: R) -> Self::Merged {
+                $crate::Branch::Done(resp)
+            }
+        }
+        impl $crate::Status for $t {
+            fn succeeded(&self) -> bool {
+                true
+            }
+            fn error(&self) -> Option<String> {
+                None
+            }
+        }
+    };
+}
+
+/// Wire a custom response type into the framework.
+///
+/// Generates `Merge<Self>`, `Status`, and `Step` so the type works in standard
+/// pipelines and async chains.
+///
+/// ```ignore
+/// impl_response!(MyResp);
+/// ```
+#[macro_export]
+macro_rules! impl_response {
+    ($t:ty) => {
+        impl $crate::Step for $t {
+            type Out = $t;
+            type Fut = ::core::future::Ready<$t>;
+            fn into_step(self) -> Self::Fut {
+                ::core::future::ready(self)
+            }
+        }
+        impl $crate::Merge<$t> for $t {
+            type Merged = $t;
+            fn into_continue(self) -> Self::Merged {
+                self
+            }
+            fn from_done(resp: $t) -> Self::Merged {
+                resp
+            }
+        }
+        impl $crate::Status for $t {
+            fn succeeded(&self) -> bool {
+                $crate::Response::is_ok(self)
+            }
+            fn error(&self) -> Option<String> {
+                $crate::Response::error_msg(self)
+            }
+        }
+    };
 }
 
 /// Multi-arm fork. Predicates are checked in order; the first match
@@ -292,7 +365,7 @@ macro_rules! fork {
 #[macro_export]
 macro_rules! __fork_chain {
     ($req:ident, $pred:expr => $jig:expr, $($rest_p:expr => $rest_j:expr,)* ; $default:expr) => {
-        if ($pred)(&$req.0) {
+        if ($pred)($crate::Request::payload(&$req)) {
             ($jig)($req)
         } else {
             $crate::__fork_chain!($req, $($rest_p => $rest_j,)* ; $default)
@@ -301,21 +374,6 @@ macro_rules! __fork_chain {
     ($req:ident, ; $default:expr) => {
         ($default)($req)
     };
-}
-
-impl<Req, Resp> Branch<Req, Resp> {
-    /// Append the next jig to a guarded pipeline. If the previous step was
-    /// `Done`, its response is propagated and `jig` is not run.
-    pub fn then<J>(self, jig: J) -> <J::Out as Merge<Resp>>::Merged
-    where
-        J: Jig<Request<Req>>,
-        J::Out: Merge<Resp>,
-    {
-        match self {
-            Branch::Continue(r) => <J::Out as Merge<Resp>>::into_continue(jig.run(r)),
-            Branch::Done(resp) => <J::Out as Merge<Resp>>::from_done(resp),
-        }
-    }
 }
 
 #[cfg(test)]

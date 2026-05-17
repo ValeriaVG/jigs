@@ -4,11 +4,11 @@ mod pipeline;
 mod types;
 
 use crate::pipeline::{all_jigs, handle};
+use crate::types::CtxReq;
 use crate::types::{AgentInput, Ctx};
-use jigs::Request;
 
-fn make_request(token: &str, query: &str) -> Request<Ctx> {
-    Request(Ctx::new(AgentInput {
+fn make_request(token: &str, query: &str) -> CtxReq {
+    CtxReq(Ctx::new(AgentInput {
         api_token: token.into(),
         query: query.into(),
     }))
@@ -17,7 +17,7 @@ fn make_request(token: &str, query: &str) -> Request<Ctx> {
 async fn run(label: &str, token: &str, query: &str) {
     println!("\n== {label} ==");
     let resp = handle(make_request(token, query)).await;
-    match &resp.inner {
+    match &resp.0 {
         Ok(o) => println!(
             "ok tenant={} cached={} sources={:?}\n  answer: {}",
             o.tenant_id, o.cached, o.sources, o.answer

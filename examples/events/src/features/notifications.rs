@@ -1,15 +1,17 @@
-use crate::types::{Event, EventCtx, EventResult};
+use crate::types::EventReq;
+use crate::types::EventResp;
+use crate::types::{Event, EventResult};
 use jigs::{jig, Branch, Request, Response};
 
 #[jig]
-fn validate_notification(req: Request<EventCtx>) -> Branch<EventCtx, EventResult> {
+fn validate_notification(req: EventReq) -> Branch<EventReq, EventResp> {
     match &req.0.event {
         Event::UserNotification {
             channel, message, ..
         } => {
             let allowed = ["email", "push", "sms"];
             if !allowed.contains(&channel.as_str()) || message.is_empty() {
-                return Branch::Done(Response::err("invalid notification payload"));
+                return Branch::Done(EventResp::err("invalid notification payload"));
             }
         }
         _ => return Branch::Continue(req),
@@ -18,7 +20,7 @@ fn validate_notification(req: Request<EventCtx>) -> Branch<EventCtx, EventResult
 }
 
 #[jig]
-fn build_result(req: Request<EventCtx>) -> Response<EventResult> {
+fn build_result(req: EventReq) -> EventResp {
     let ctx = req.0;
     let outcome = match &ctx.event {
         Event::UserNotification {
@@ -30,7 +32,7 @@ fn build_result(req: Request<EventCtx>) -> Response<EventResult> {
         }
         _ => "unknown notification event".to_string(),
     };
-    Response::ok(EventResult {
+    EventResp::ok(EventResult {
         event_id: format!("{:?}", ctx.event),
         tenant_id: ctx.tenant_id,
         outcome,
@@ -38,6 +40,6 @@ fn build_result(req: Request<EventCtx>) -> Response<EventResult> {
 }
 
 #[jig]
-pub fn handle(req: Request<EventCtx>) -> Response<EventResult> {
+pub fn handle(req: EventReq) -> EventResp {
     req.then(validate_notification).then(build_result)
 }

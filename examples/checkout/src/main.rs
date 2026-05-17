@@ -4,12 +4,12 @@ mod store;
 mod types;
 
 use crate::pipeline::{all_jigs, handle};
-use crate::types::{CheckoutInput, Ctx};
-use jigs::Request;
+use crate::types::{CheckoutInput, CheckoutReq, Ctx};
+use jigs::Response;
 use std::time::Instant;
 
-fn make_request(token: &str, items: Vec<(String, u32)>) -> Request<Ctx> {
-    Request(Ctx::new(CheckoutInput {
+fn make_request(token: &str, items: Vec<(String, u32)>) -> CheckoutReq {
+    CheckoutReq(Ctx::new(CheckoutInput {
         token: token.into(),
         items,
     }))
@@ -25,7 +25,7 @@ async fn run_sample() {
         ],
     );
     let resp = handle(req).await;
-    match &resp.inner {
+    match &resp.0 {
         Ok(o) => println!(
             "sample OK: order={} user={} reservation={} total={}c lines={}",
             o.order_id, o.user_id, o.reservation, o.total_cents, o.line_count
@@ -40,7 +40,7 @@ async fn run_unauth_sample() {
     let resp = handle(make_request("garbage", vec![("SKU-X".into(), 1)])).await;
     println!(
         "\nunauth sample: {}",
-        match resp.inner {
+        match resp.0 {
             Ok(_) => "unexpectedly OK".to_string(),
             Err(e) => e,
         }

@@ -44,14 +44,20 @@ cargo add jigs --features trace
 ## Quickstart
 
 ```rust
-use jigs::{jig, Request, Response};
+use jigs::{jig, jigs, Request, Response};
+
+#[derive(Clone, Request)]
+struct Input(u32);
+
+#[derive(Clone, Response)]
+struct Output(Result<String, String>);
 
 #[jig]
-fn validate(r: Request<u32>) -> Request<u32> { r }
+fn validate(r: Input) -> Input { r }
 
 #[jig]
-fn process(r: Request<u32>) -> Response<String> {
-    Response::ok(format!("got {}", r.0))
+fn handle(r: Input) -> Output {
+    Output::ok(format!("got {}", r.0))
 }
 
 #[jig]
@@ -64,8 +70,8 @@ fn handle(request: Request) -> Response {
 jigs!(handle)
 
 fn main() {
-    let response = hande(Request(42u32));
-    assert_eq!(response.inner.unwrap(), "got 42");
+    let response = Input(42u32).then(validate).then(handle);
+    assert_eq!(response.0.unwrap(), "got 42");
 }
 ```
 
@@ -73,10 +79,10 @@ There are four kinds of jigs, distinguished by their input and output types:
 
 | Input      | Output            | Purpose                          |
 | ---------- | ----------------- | -------------------------------- |
-| `Request`  | `Request`         | enrich, validate, transform      |
-| `Request`  | `Response`        | terminal handler                 |
-| `Response` | `Response`        | post-process the outgoing message|
-| `Request`  | `Branch<Req,Resp>`| guard that may short-circuit     |
+| `impl Request`  | `impl Request`         | enrich, validate, transform      |
+| `impl Request`  | `impl Response`        | terminal handler               |
+| `impl Response` | `impl Response`        | post-process the outgoing message |
+| `impl Request`  | `Branch<Req,Resp>`    | guard that may short-circuit   |
 
 The type system enforces ordering: once you hold a `Response`, you cannot chain a jig that expects a `Request`. Errored responses and `Branch::Done` short-circuit the rest of the pipeline.
 
@@ -88,7 +94,7 @@ For multi-arm dispatch use `fork!`. First matching predicate wins, `_` is the de
 
 ```rust
 #[jig]
-fn route(req: Request<HttpRequest>) -> Response<String> {
+fn route(req: HttpReq) -> HttpResp {
     fork!(req,
         |r: &HttpRequest| r.path == "/"                  => root,
         |r: &HttpRequest| r.path.starts_with("/hello/")  => hello,
@@ -103,10 +109,16 @@ Each `#[jig]` gets a compile-time marker type that implements `JigDef`. The `jig
 
 ```rust
 // pipeline.rs — same module as the entry function
-use jigs::{jig, Request, Response};
+use jigs::{jig, jigs, Request, Response};
+
+#[derive(Clone, Request)]
+struct Input(u32);
+
+#[derive(Clone, Response)]
+struct Output(Result<String, String>);
 
 #[jig]
-fn handle(r: Request<u32>) -> Response<String> { /* ... */ }
+fn handle(r: Input) -> Output { /* ... */ }
 
 jigs!(handle);  // generates all_jigs() and find_jig() here
 ```

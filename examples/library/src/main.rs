@@ -1,5 +1,4 @@
-use jigs::Request;
-use jigs_example_library::{all_jigs, handle};
+use jigs_example_library::{all_jigs, handle, BytesReq};
 
 fn main() {
     if std::env::var("JIGS_MAP").is_ok() {
@@ -25,8 +24,8 @@ fn main() {
     }
     let name = std::env::args().nth(1).unwrap_or_default();
     let bytes = name.into_bytes();
-    let response = handle(Request(bytes));
-    match response.inner {
+    let response = handle(BytesReq(bytes));
+    match response.0 {
         Ok(v) => println!("{v}"),
         Err(e) => println!("ERROR: {e}"),
     }
