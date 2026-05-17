@@ -32,7 +32,7 @@ pub async fn lookup_sku(sku: &str) -> Option<(u32, u64)> {
     if sku.is_empty() {
         return None;
     }
-    let stock = (sku.bytes().map(|b| b as u32).sum::<u32>() % 20) + 1;
+    let stock = (sku.bytes().map(u32::from).sum::<u32>() % 20) + 1;
     let price = (sku.len() as u64) * 199;
     Some((stock, price))
 }
@@ -41,16 +41,16 @@ pub async fn reserve(user_id: u64, items: &[(String, u32)]) -> String {
     io().await;
     let h: u64 = items
         .iter()
-        .map(|(s, q)| s.bytes().map(|b| b as u64).sum::<u64>() * (*q as u64))
+        .map(|(s, q)| s.bytes().map(u64::from).sum::<u64>() * u64::from(*q))
         .sum();
     format!("rsv-{user_id}-{h}")
 }
 
 pub async fn persist_order(user_id: u64, total_cents: u64, reservation: &str) -> u64 {
     io().await;
-    let r: u64 = reservation.bytes().map(|b| b as u64).sum();
+    let r: u64 = reservation.bytes().map(u64::from).sum();
     user_id
-        .wrapping_mul(1315423911)
+        .wrapping_mul(1_315_423_911)
         .wrapping_add(total_cents)
         .wrapping_add(r)
 }

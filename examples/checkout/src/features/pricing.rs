@@ -8,7 +8,7 @@ fn compute_totals(req: CheckoutReq) -> CheckoutReq {
         .input
         .items
         .iter()
-        .map(|(sku, qty)| req.0.prices.get(sku).copied().unwrap_or(0) * (*qty as u64))
+        .map(|(sku, qty)| req.0.prices.get(sku).copied().unwrap_or(0) * u64::from(*qty))
         .sum();
     CheckoutReq(Ctx {
         total_cents: total,

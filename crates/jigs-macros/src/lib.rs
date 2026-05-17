@@ -10,6 +10,7 @@
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
+use syn::spanned::Spanned;
 use syn::visit::Visit;
 use syn::{
     parse_macro_input, parse_quote, Data, DeriveInput, Expr, ExprMethodCall, Field, Fields,
@@ -49,6 +50,7 @@ fn marker_path_for(name: &str) -> TokenStream2 {
 pub fn jig(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let input = parse_macro_input!(item as ItemFn);
     let vis = &input.vis;
+    let attrs = &input.attrs;
     let block = &input.block;
     let name_str = input.sig.ident.to_string();
     let marker = marker_ident(&name_str);
@@ -58,8 +60,10 @@ pub fn jig(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let output_type_str = return_payload(&input.sig.output);
     let is_async = input.sig.asyncness.is_some();
 
-    let chain_tokens: Vec<TokenStream2> = collect_chain(&input.block)
-        .into_iter()
+    let chain = collect_chain(&input.block);
+
+    let chain_tokens: Vec<TokenStream2> = chain
+        .iter()
         .map(|(name, kind)| {
             let kind_ident = match kind {
                 ChainKindTok::Then => quote!(::jigs::ChainKind::Then),
@@ -69,10 +73,10 @@ pub fn jig(_attr: TokenStream, item: TokenStream) -> TokenStream {
         })
         .collect();
 
-    let chain_collect: Vec<TokenStream2> = collect_chain(&input.block)
-        .into_iter()
+    let chain_collect: Vec<TokenStream2> = chain
+        .iter()
         .map(|(name, _kind)| {
-            let path = marker_path_for(&name);
+            let path = marker_path_for(name);
             quote! { <#path as ::jigs::JigDef>::collect(out); }
         })
         .collect();
@@ -97,17 +101,17 @@ pub fn jig(_attr: TokenStream, item: TokenStream) -> TokenStream {
             };
 
             fn collect(out: &mut Vec<&'static ::jigs::JigMeta>) {
-                let name = <Self as ::jigs::JigDef>::META.name;
-                if out.iter().any(|m| m.name == name) {
+                let meta = &<Self as ::jigs::JigDef>::META;
+                if out.iter().any(|m| ::std::ptr::eq(*m, meta)) {
                     return;
                 }
-                out.push(&<Self as ::jigs::JigDef>::META);
+                out.push(meta);
                 #(#chain_collect)*
             }
         }
     };
 
-    let response_input_ident = if input_str == "Response" || input_str == "Resp" {
+    let response_input_ident = if input_str == "Response" {
         first_arg_ident(&input.sig)
     } else {
         None
@@ -125,12 +129,12 @@ pub fn jig(_attr: TokenStream, item: TokenStream) -> TokenStream {
         };
 
         let body = async_body(block, &name_str, response_input_ident.as_ref());
-        return quote! { #marker_def #vis #sig { #body } }.into();
+        return quote! { #marker_def #(#attrs)* #vis #sig { #body } }.into();
     }
 
     let sig = &input.sig;
     let body = sync_body(block, &name_str, response_input_ident.as_ref());
-    quote! { #marker_def #vis #sig { #body } }.into()
+    quote! { #marker_def #(#attrs)* #vis #sig { #body } }.into()
 }
 
 #[proc_macro_derive(Request, attributes(req))]
@@ -142,18 +146,14 @@ pub fn derive_request(input: TokenStream) -> TokenStream {
 fn generate_req(input: &DeriveInput) -> Result<TokenStream, syn::Error> {
     let name = &input.ident;
     let (impl_generics, type_generics, where_clause) = input.generics.split_for_impl();
-    let data = match &input.data {
-        Data::Struct(s) => s,
-        _ => {
-            return Err(syn::Error::new_spanned(
-                input,
-                "Request can only be derived for structs",
-            ));
-        }
+    let Data::Struct(data) = &input.data else {
+        return Err(syn::Error::new_spanned(
+            input,
+            "Request can only be derived for structs",
+        ));
     };
 
     let mut explicit_field: Option<Ident> = None;
-    let mut explicit_payload: Option<Type> = None;
 
     for attr in &input.attrs {
         if attr.path().is_ident("req") {
@@ -164,19 +164,26 @@ fn generate_req(input: &DeriveInput) -> Result<TokenStream, syn::Error> {
                     explicit_field = Some(syn::Ident::new(&lit.value(), lit.span()));
                     return Ok(());
                 }
-                if meta.path.is_ident("payload") {
-                    let val = meta.value()?;
-                    let lit: syn::LitStr = val.parse()?;
-                    explicit_payload = Some(syn::parse_str(&lit.value())?);
-                    return Ok(());
-                }
                 Err(meta.error("unrecognized req attribute"))
             })?;
         }
     }
 
     let (payload_decl, payload_ref_expr, into_expr, from_expr) =
-        derive_req_field_info(data, explicit_field, explicit_payload, input)?;
+        derive_req_field_info(data, explicit_field, input)?;
+
+    let mut merge_generics = input.generics.clone();
+    merge_generics
+        .params
+        .push(syn::GenericParam::Type(syn::TypeParam {
+            attrs: Vec::new(),
+            ident: parse_quote!(__R),
+            colon_token: Some(syn::Token![:](input.generics.span())),
+            bounds: parse_quote!(::jigs::Response),
+            eq_token: None,
+            default: None,
+        }));
+    let (merge_impl_generics, _, merge_where_clause) = merge_generics.split_for_impl();
 
     Ok(quote! {
         impl #impl_generics ::jigs::Request for #name #type_generics #where_clause {
@@ -191,13 +198,20 @@ fn generate_req(input: &DeriveInput) -> Result<TokenStream, syn::Error> {
                 #from_expr
             }
         }
-        impl<__R: ::jigs::Response> ::jigs::Merge<__R> for #name #type_generics #where_clause {
-            type Merged = ::jigs::Branch<#name, __R>;
+        impl #merge_impl_generics ::jigs::Merge<__R> for #name #type_generics #merge_where_clause {
+            type Merged = ::jigs::Branch<#name #type_generics, __R>;
             fn into_continue(self) -> Self::Merged {
                 ::jigs::Branch::Continue(self)
             }
             fn from_done(resp: __R) -> Self::Merged {
                 ::jigs::Branch::Done(resp)
+            }
+        }
+        impl #impl_generics ::jigs::Step for #name #type_generics #where_clause {
+            type Out = #name #type_generics;
+            type Fut = ::core::future::Ready<#name #type_generics>;
+            fn into_step(self) -> Self::Fut {
+                ::core::future::ready(self)
             }
         }
         impl #impl_generics ::jigs::Status for #name #type_generics #where_clause {
@@ -215,37 +229,25 @@ fn generate_req(input: &DeriveInput) -> Result<TokenStream, syn::Error> {
 fn derive_req_field_info(
     data: &syn::DataStruct,
     explicit_field: Option<Ident>,
-    explicit_payload: Option<Type>,
     input: &DeriveInput,
 ) -> Result<(TokenStream2, TokenStream2, TokenStream2, TokenStream2), syn::Error> {
     if let Some(field_ident) = explicit_field {
         let field = find_field(data, &field_ident)?;
-        let payload_ty = explicit_payload.unwrap_or_else(|| field.ty.clone());
+        let payload_ty = &field.ty;
         let payload_decl = quote! { type Payload = #payload_ty; };
         let payload_ref = quote! { &self.#field_ident };
         let into_expr = quote! {
-            {
-                let mut __tmp = ::core::mem::MaybeUninit::<Self>::uninit();
-                unsafe {
-                    ::core::ptr::write(
-                        __tmp.as_mut_ptr()
-                            .add(::core::mem::offset_of!(Self, #field_ident))
-                            .cast(),
-                        payload,
-                    );
-                    std::mem::forget(self);
-                    __tmp.assume_init()
-                }
-            }
+            let Self { #field_ident, .. } = self;
+            #field_ident
         };
-        let from_expr = quote! { Self { #field_ident: payload, ..unsafe { std::mem::zeroed() } } };
+        let from_expr = quote! { Self { #field_ident: payload, ..Default::default() } };
         return Ok((payload_decl, payload_ref, into_expr, from_expr));
     }
 
     match &data.fields {
         Fields::Unnamed(FieldsUnnamed { unnamed, .. }) if unnamed.len() == 1 => {
             let field = unnamed.first().unwrap();
-            let payload_ty = explicit_payload.unwrap_or_else(|| field.ty.clone());
+            let payload_ty = &field.ty;
             let payload_decl = quote! { type Payload = #payload_ty; };
             let payload_ref = quote! { &self.0 };
             let into_expr = quote! { self.0 };
@@ -255,7 +257,7 @@ fn derive_req_field_info(
         Fields::Named(FieldsNamed { named, .. }) if named.len() == 1 => {
             let field = named.first().unwrap();
             let field_ident = field.ident.as_ref().unwrap();
-            let payload_ty = explicit_payload.unwrap_or_else(|| field.ty.clone());
+            let payload_ty = &field.ty;
             let payload_decl = quote! { type Payload = #payload_ty; };
             let payload_ref = quote! { &self.#field_ident };
             let into_expr = quote! { self.#field_ident };
@@ -316,7 +318,7 @@ fn generate_response_struct(
             let payload_ty = extract_result_payload(&f.ty,
                 "Response derive on single-field structs expects `Result<Payload, String>`",
             )?;
-            generate_response_impls(ResponseImplParts {
+            Ok(generate_response_impls(ResponseImplParts {
                 name,
                 impl_generics,
                 type_generics,
@@ -327,7 +329,7 @@ fn generate_response_struct(
                 is_ok_expr,
                 into_result_expr,
                 error_msg_expr,
-            })
+            }))
         }
         Fields::Named(FieldsNamed { named, .. }) if named.len() == 1 => {
             let f = named.first().unwrap();
@@ -341,7 +343,7 @@ fn generate_response_struct(
             let is_ok_expr = quote! { self.#field_ident.is_ok() };
             let into_result_expr = quote! { self.#field_ident };
             let error_msg_expr = quote! { self.#field_ident.as_ref().err().cloned() };
-            generate_response_impls(ResponseImplParts {
+            Ok(generate_response_impls(ResponseImplParts {
                 name,
                 impl_generics,
                 type_generics,
@@ -352,7 +354,7 @@ fn generate_response_struct(
                 is_ok_expr,
                 into_result_expr,
                 error_msg_expr,
-            })
+            }))
         }
         Fields::Named(FieldsNamed { named, .. }) if named.len() == 2 => {
             generate_response_two_fields(input, data, named, name, impl_generics, type_generics, where_clause)
@@ -373,19 +375,19 @@ fn generate_response_two_fields(
     type_generics: syn::TypeGenerics,
     where_clause: Option<&syn::WhereClause>,
 ) -> Result<TokenStream, syn::Error> {
-    let mut ok_field_idx: usize = 0;
-    let mut err_field_idx: usize = 1;
+    let mut ok_field_idx: Option<usize> = None;
+    let mut err_field_idx: Option<usize> = None;
 
     for (i, f) in named.iter().enumerate() {
         for attr in &f.attrs {
             if attr.path().is_ident("resp") {
                 attr.parse_nested_meta(|meta| {
                     if meta.path.is_ident("ok") {
-                        ok_field_idx = i;
+                        ok_field_idx = Some(i);
                         return Ok(());
                     }
                     if meta.path.is_ident("err") {
-                        err_field_idx = i;
+                        err_field_idx = Some(i);
                         return Ok(());
                     }
                     Err(meta.error("unrecognized resp attribute"))
@@ -394,8 +396,24 @@ fn generate_response_two_fields(
         }
     }
 
-    let ok_field = &named[ok_field_idx];
-    let err_field = &named[err_field_idx];
+    let ok_idx = match ok_field_idx {
+        Some(i) => i,
+        None => err_field_idx.map_or(0, |e| 1 - e),
+    };
+    let err_idx = match err_field_idx {
+        Some(i) => i,
+        None => ok_field_idx.map_or(1, |o| 1 - o),
+    };
+
+    if ok_idx == err_idx {
+        return Err(syn::Error::new_spanned(
+            input,
+            "ok and err fields cannot be the same",
+        ));
+    }
+
+    let ok_field = &named[ok_idx];
+    let err_field = &named[err_idx];
 
     let ok_ident = ok_field.ident.as_ref().unwrap();
     let err_ident = err_field.ident.as_ref().unwrap();
@@ -412,41 +430,47 @@ fn generate_response_two_fields(
         ));
     }
 
-    let payload_ty = &ok_field.ty;
+    let payload_ty = extract_option_inner(
+        &ok_field.ty,
+        "Response derive with two fields expects the ok field to be `Option<Payload>`",
+    )?;
     let ok_expr = quote! { Self { #ok_ident: Some(payload), #err_ident: "".to_string() } };
     let err_expr = quote! { Self { #ok_ident: None, #err_ident: msg.into() } };
     let is_ok_expr = quote! { self.#ok_ident.is_some() };
     let into_result_expr = quote! {
         match self.#ok_ident {
             Some(v) => Ok(v),
-            None => Err(std::mem::take(&mut self.#err_ident)),
+            None => Err(self.#err_ident),
         }
     };
     let error_msg_expr = quote! {
-        if self.#ok_ident.is_some() { None } else { Some(std::mem::take(&mut self.#err_ident)) }
+        if self.#ok_ident.is_some() { None } else { Some(self.#err_ident.clone()) }
     };
 
-    generate_response_impls(ResponseImplParts {
+    Ok(generate_response_impls(ResponseImplParts {
         name,
         impl_generics,
         type_generics,
         where_clause,
-        payload_ty,
+        payload_ty: &payload_ty,
         ok_expr,
         err_expr,
         is_ok_expr,
         into_result_expr,
         error_msg_expr,
-    })
+    }))
 }
 
-fn generate_response_enum(
-    input: &DeriveInput,
-    data: &syn::DataEnum,
-) -> Result<TokenStream, syn::Error> {
-    let name = &input.ident;
-    let (impl_generics, type_generics, where_clause) = input.generics.split_for_impl();
+struct ClassifiedVariant<'a> {
+    variant: &'a syn::Variant,
+    ident: syn::Ident,
+    fields: &'a syn::Fields,
+}
 
+fn classify_enum_variants<'a>(
+    data: &'a syn::DataEnum,
+    input: &'a DeriveInput,
+) -> Result<(ClassifiedVariant<'a>, ClassifiedVariant<'a>), syn::Error> {
     if data.variants.len() != 2 {
         return Err(syn::Error::new_spanned(
             input,
@@ -454,8 +478,8 @@ fn generate_response_enum(
         ));
     }
 
-    let mut ok_variant: Option<(&syn::Variant, syn::Ident, &syn::Fields)> = None;
-    let mut err_variant: Option<(&syn::Variant, syn::Ident, &syn::Fields)> = None;
+    let mut ok_variant: Option<ClassifiedVariant<'_>> = None;
+    let mut err_variant: Option<ClassifiedVariant<'_>> = None;
 
     for v in &data.variants {
         let mut is_ok = false;
@@ -476,60 +500,152 @@ fn generate_response_enum(
             }
         }
 
-        if is_ok || (ok_variant.is_none() && !is_err) {
+        if is_ok && is_err {
+            return Err(syn::Error::new_spanned(
+                v,
+                "variant cannot be both #[resp(ok)] and #[resp(err)]",
+            ));
+        }
+
+        let cv = ClassifiedVariant {
+            variant: v,
+            ident: v.ident.clone(),
+            fields: &v.fields,
+        };
+
+        if is_ok {
+            if ok_variant.is_some() {
+                return Err(syn::Error::new_spanned(
+                    v,
+                    "only one variant can be #[resp(ok)]",
+                ));
+            }
             if v.fields.len() != 1 {
                 return Err(syn::Error::new_spanned(
                     v,
                     "ok variant must have exactly one field (the payload)",
                 ));
             }
-            ok_variant = Some((v, v.ident.clone(), &v.fields));
-        } else if is_err || err_variant.is_none() {
-            err_variant = Some((v, v.ident.clone(), &v.fields));
+            ok_variant = Some(cv);
+        } else if is_err {
+            if err_variant.is_some() {
+                return Err(syn::Error::new_spanned(
+                    v,
+                    "only one variant can be #[resp(err)]",
+                ));
+            }
+            if v.fields.len() > 1 {
+                return Err(syn::Error::new_spanned(
+                    v,
+                    "err variant must have 0 or 1 fields",
+                ));
+            }
+            err_variant = Some(cv);
+        } else if ok_variant.is_none() {
+            if v.fields.len() != 1 {
+                return Err(syn::Error::new_spanned(
+                    v,
+                    "ok variant must have exactly one field (the payload)",
+                ));
+            }
+            ok_variant = Some(cv);
+        } else if err_variant.is_none() {
+            if v.fields.len() > 1 {
+                return Err(syn::Error::new_spanned(
+                    v,
+                    "err variant must have 0 or 1 fields",
+                ));
+            }
+            err_variant = Some(cv);
         }
     }
 
-    let (ok_v, ok_ident, ok_fields) = ok_variant.ok_or_else(|| {
+    let ok = ok_variant.ok_or_else(|| {
         syn::Error::new_spanned(input, "Could not identify ok variant. Use #[resp(ok)]")
     })?;
-
-    let (_err_v, err_ident, err_fields) = err_variant.ok_or_else(|| {
+    let err = err_variant.ok_or_else(|| {
         syn::Error::new_spanned(input, "Could not identify err variant. Use #[resp(err)]")
     })?;
+    Ok((ok, err))
+}
 
-    let payload_ty = &ok_v.fields.iter().next().unwrap().ty;
+struct VariantCodegen {
+    constructor: TokenStream2,
+    wild: TokenStream2,
+    pattern: TokenStream2,
+}
 
-    let ok_unnamed = ok_fields.iter().next().unwrap().ident.is_none();
-    let ok_binding = match ok_fields.iter().next().unwrap().ident {
-        Some(ref f) => quote! { { #f: __p } },
-        None => quote! { (__p) },
-    };
-    let ok_constr = if ok_unnamed {
-        quote!(#name::#ok_ident(__p))
-    } else {
-        let f = ok_fields.iter().next().unwrap().ident.as_ref().unwrap();
-        quote!(#name::#ok_ident { #f: __p })
-    };
-
-    let err_has_field = err_fields.len() == 1;
-    let err_binding = if err_has_field {
-        match err_fields.iter().next().unwrap().ident {
-            Some(ref f) => quote! { { #f: __e } },
-            None => quote! { (__e) },
+fn variant_codegen(
+    name: &syn::Ident,
+    ident: &syn::Ident,
+    fields: &syn::Fields,
+    binding_name: &str,
+) -> VariantCodegen {
+    let b = syn::Ident::new(binding_name, name.span());
+    if fields.is_empty() {
+        let constructor = quote!(#name::#ident);
+        let wild = quote!(#name::#ident);
+        let pattern = quote!(#name::#ident);
+        VariantCodegen {
+            constructor,
+            wild,
+            pattern,
         }
     } else {
-        quote! {}
-    };
-    let err_constr = if err_has_field {
-        let f = err_fields.iter().next().unwrap().ident.clone();
-        if f.is_none() {
-            quote!(#name::#err_ident(__e))
+        let unnamed = fields.iter().next().unwrap().ident.is_none();
+        let constructor = if unnamed {
+            quote!(#name::#ident(#b))
         } else {
-            quote!(#name::#err_ident { #f: __e })
+            let f = fields.iter().next().unwrap().ident.as_ref().unwrap();
+            quote!(#name::#ident { #f: #b })
+        };
+        let wild = if unnamed {
+            quote! { #name::#ident(..) }
+        } else {
+            quote! { #name::#ident { .. } }
+        };
+        let pattern = if unnamed {
+            let b = syn::Ident::new(binding_name, name.span());
+            quote! { #name::#ident(#b) }
+        } else {
+            let f = fields.iter().next().unwrap().ident.as_ref().unwrap();
+            let b = syn::Ident::new(binding_name, name.span());
+            quote! { #name::#ident { #f: #b } }
+        };
+        VariantCodegen {
+            constructor,
+            wild,
+            pattern,
         }
-    } else {
-        quote!(#name::#err_ident)
-    };
+    }
+}
+
+fn generate_response_enum(
+    input: &DeriveInput,
+    data: &syn::DataEnum,
+) -> Result<TokenStream, syn::Error> {
+    let name = &input.ident;
+    let (impl_generics, type_generics, where_clause) = input.generics.split_for_impl();
+
+    let (ok, err) = classify_enum_variants(data, input)?;
+
+    let ok_ident = &ok.ident;
+    let err_ident = &err.ident;
+    let payload_ty = &ok.variant.fields.iter().next().unwrap().ty;
+
+    let ok_cg = variant_codegen(name, ok_ident, ok.fields, "__p");
+    let err_has_field = err.fields.len() == 1;
+    let err_cg = variant_codegen(name, err_ident, err.fields, "__e");
+    let VariantCodegen {
+        constructor: ok_constr,
+        wild: ok_wild,
+        pattern: ok_pattern,
+    } = ok_cg;
+    let VariantCodegen {
+        constructor: err_constr,
+        wild: err_wild,
+        pattern: err_pattern,
+    } = err_cg;
 
     let ok_expr = quote! {
         {
@@ -550,42 +666,42 @@ fn generate_response_enum(
 
     let is_ok_expr = quote! {
         match self {
-            #name::#ok_ident(..) => true,
-            #name::#err_ident(..) => false,
+            #ok_wild => true,
+            #err_wild => false,
         }
     };
     let into_result_expr = if err_has_field {
         quote! {
             match self {
-                #name::#ok_ident(#ok_binding) => Ok(__p),
-                #name::#err_ident(#err_binding) => Err(__e),
+                #ok_pattern => Ok(__p),
+                #err_pattern => Err(__e),
             }
         }
     } else {
         quote! {
             match self {
-                #name::#ok_ident(#ok_binding) => Ok(__p),
-                #name::#err_ident => Err("".to_string()),
+                #ok_pattern => Ok(__p),
+                #err_wild => Err("unknown error".to_string()),
             }
         }
     };
     let error_msg_expr = if err_has_field {
         quote! {
             match self {
-                #name::#ok_ident(..) => None,
-                #name::#err_ident(#err_binding) => Some(__e.to_string()),
+                #ok_wild => None,
+                #err_pattern => Some(__e.to_string()),
             }
         }
     } else {
         quote! {
             match self {
-                #name::#ok_ident(..) => None,
-                #name::#err_ident => Some("".to_string()),
+                #ok_wild => None,
+                #err_wild => Some("unknown error".to_string()),
             }
         }
     };
 
-    generate_response_impls(ResponseImplParts {
+    Ok(generate_response_impls(ResponseImplParts {
         name,
         impl_generics,
         type_generics,
@@ -596,7 +712,7 @@ fn generate_response_enum(
         is_ok_expr,
         into_result_expr,
         error_msg_expr,
-    })
+    }))
 }
 
 struct ResponseImplParts<'a> {
@@ -612,7 +728,7 @@ struct ResponseImplParts<'a> {
     error_msg_expr: TokenStream2,
 }
 
-fn generate_response_impls(parts: ResponseImplParts<'_>) -> Result<TokenStream, syn::Error> {
+fn generate_response_impls(parts: ResponseImplParts<'_>) -> proc_macro::TokenStream {
     let ResponseImplParts {
         name,
         impl_generics,
@@ -625,7 +741,7 @@ fn generate_response_impls(parts: ResponseImplParts<'_>) -> Result<TokenStream, 
         into_result_expr,
         error_msg_expr,
     } = parts;
-    Ok(quote! {
+    quote! {
         impl #impl_generics ::jigs::Response for #name #type_generics #where_clause {
             type Payload = #payload_ty;
             fn ok(payload: Self::Payload) -> Self {
@@ -644,13 +760,20 @@ fn generate_response_impls(parts: ResponseImplParts<'_>) -> Result<TokenStream, 
                 #error_msg_expr
             }
         }
-        impl #impl_generics ::jigs::Merge<#name> for #name #type_generics #where_clause {
-            type Merged = #name;
+        impl #impl_generics ::jigs::Merge<#name #type_generics> for #name #type_generics #where_clause {
+            type Merged = #name #type_generics;
             fn into_continue(self) -> Self::Merged {
                 self
             }
-            fn from_done(resp: #name) -> Self::Merged {
+            fn from_done(resp: #name #type_generics) -> Self::Merged {
                 resp
+            }
+        }
+        impl #impl_generics ::jigs::Step for #name #type_generics #where_clause {
+            type Out = #name #type_generics;
+            type Fut = ::core::future::Ready<#name #type_generics>;
+            fn into_step(self) -> Self::Fut {
+                ::core::future::ready(self)
             }
         }
         impl #impl_generics ::jigs::Status for #name #type_generics #where_clause {
@@ -662,7 +785,7 @@ fn generate_response_impls(parts: ResponseImplParts<'_>) -> Result<TokenStream, 
             }
         }
     }
-    .into())
+    .into()
 }
 
 fn extract_result_payload(ty: &Type, msg: &str) -> Result<Type, syn::Error> {
@@ -679,6 +802,21 @@ fn extract_result_payload(ty: &Type, msg: &str) -> Result<Type, syn::Error> {
                                 }
                             }
                         }
+                    }
+                }
+            }
+        }
+    }
+    Err(syn::Error::new_spanned(ty, msg))
+}
+
+fn extract_option_inner(ty: &Type, msg: &str) -> Result<Type, syn::Error> {
+    if let Type::Path(p) = ty {
+        if let Some(seg) = p.path.segments.last() {
+            if seg.ident == "Option" {
+                if let syn::PathArguments::AngleBracketed(args) = &seg.arguments {
+                    if let Some(syn::GenericArgument::Type(t)) = args.args.first() {
+                        return Ok(t.clone());
                     }
                 }
             }
@@ -736,21 +874,25 @@ fn first_arg_ident(sig: &syn::Signature) -> Option<syn::Ident> {
 }
 
 #[cfg(feature = "trace")]
-fn sync_body(
-    block: &syn::Block,
-    name_str: &str,
-    response_input: Option<&syn::Ident>,
-) -> TokenStream2 {
+struct TraceParts {
+    pre: TokenStream2,
+    post: TokenStream2,
+}
+
+#[cfg(feature = "trace")]
+fn trace_instrument(name_str: &str, response_input: Option<&syn::Ident>) -> TraceParts {
     let marker = marker_ident(name_str);
-    let snapshot = match response_input {
-        Some(id) => quote! { let __jig_input_ok = ::jigs::Status::succeeded(&#id); },
-        None => quote! { let __jig_input_ok = true; },
+    let snapshot = if let Some(id) = response_input {
+        quote! { let __jig_input_ok = ::jigs::Status::succeeded(&#id); }
+    } else {
+        quote! { let __jig_input_ok = true; }
     };
-    quote! {
+    let pre = quote! {
         #snapshot
         let __jig_idx = ::jigs::trace::enter(&<#marker as ::jigs::JigDef>::META);
         let __jig_start = ::std::time::Instant::now();
-        let __jig_result = (move || #block)();
+    };
+    let post = quote! {
         let mut __jig_ok = ::jigs::Status::succeeded(&__jig_result);
         let mut __jig_err = ::jigs::Status::error(&__jig_result);
         if !__jig_input_ok && !__jig_ok {
@@ -759,6 +901,21 @@ fn sync_body(
         }
         ::jigs::trace::exit(__jig_idx, __jig_start.elapsed(), __jig_ok, __jig_err);
         __jig_result
+    };
+    TraceParts { pre, post }
+}
+
+#[cfg(feature = "trace")]
+fn sync_body(
+    block: &syn::Block,
+    name_str: &str,
+    response_input: Option<&syn::Ident>,
+) -> TokenStream2 {
+    let TraceParts { pre, post } = trace_instrument(name_str, response_input);
+    quote! {
+        #pre
+        let __jig_result = (move || #block)();
+        #post
     }
 }
 
@@ -777,25 +934,12 @@ fn async_body(
     name_str: &str,
     response_input: Option<&syn::Ident>,
 ) -> TokenStream2 {
-    let marker = marker_ident(name_str);
-    let snapshot = match response_input {
-        Some(id) => quote! { let __jig_input_ok = ::jigs::Status::succeeded(&#id); },
-        None => quote! { let __jig_input_ok = true; },
-    };
+    let TraceParts { pre, post } = trace_instrument(name_str, response_input);
     quote! {
         ::jigs::Pending(async move {
-            #snapshot
-            let __jig_idx = ::jigs::trace::enter(&<#marker as ::jigs::JigDef>::META);
-            let __jig_start = ::std::time::Instant::now();
+            #pre
             let __jig_result = (async move #block).await;
-            let mut __jig_ok = ::jigs::Status::succeeded(&__jig_result);
-            let mut __jig_err = ::jigs::Status::error(&__jig_result);
-            if !__jig_input_ok && !__jig_ok {
-                __jig_ok = true;
-                __jig_err = None;
-            }
-            ::jigs::trace::exit(__jig_idx, __jig_start.elapsed(), __jig_ok, __jig_err);
-            __jig_result
+            #post
         })
     }
 }
@@ -856,7 +1000,7 @@ fn payload_type(ty: &Type) -> String {
         if let Some(seg) = p.path.segments.last() {
             let name = seg.ident.to_string();
             match name.as_str() {
-                "Request" | "Response" => {
+                "Request" | "Response" | "Pending" => {
                     if let syn::PathArguments::AngleBracketed(ref ab) = seg.arguments {
                         return generic_args_string(ab);
                     }
@@ -864,11 +1008,6 @@ fn payload_type(ty: &Type) -> String {
                 "Branch" => {
                     if let syn::PathArguments::AngleBracketed(ref ab) = seg.arguments {
                         return format!("Branch<{}>", generic_args_string(ab));
-                    }
-                }
-                "Pending" => {
-                    if let syn::PathArguments::AngleBracketed(ref ab) = seg.arguments {
-                        return generic_args_string(ab);
                     }
                 }
                 _ => {}
@@ -979,13 +1118,13 @@ impl syn::parse::Parse for ForkArgs {
         loop {
             if input.peek(syn::Token![_]) {
                 input.parse::<syn::Token![_]>()?;
-                input.parse::<syn::Token![=]>()?;
+                input.parse::<syn::Token![=>]>()?;
                 let default: syn::Expr = input.parse()?;
                 let _: Option<syn::Token![,]> = input.parse().ok();
                 return Ok(ForkArgs { arms, default });
             }
             let _pred: syn::Expr = input.parse()?;
-            input.parse::<syn::Token![=]>()?;
+            input.parse::<syn::Token![=>]>()?;
             let jig: syn::Expr = input.parse()?;
             input.parse::<syn::Token![,]>()?;
             arms.push(jig);

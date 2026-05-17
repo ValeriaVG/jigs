@@ -4,9 +4,10 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::RwLock;
 
 #[derive(Clone)]
-#[allow(dead_code)]
 pub struct User {
+    #[allow(dead_code)]
     pub id: u64,
+    #[allow(dead_code)]
     pub email: String,
     pub password: String,
 }

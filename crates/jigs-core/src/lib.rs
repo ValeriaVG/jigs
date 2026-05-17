@@ -19,6 +19,8 @@
 pub mod meta;
 pub use meta::{ChainKind, ChainStep, JigDef, JigMeta};
 
+pub mod json;
+
 /// An inbound message flowing through a pipeline.
 ///
 /// Types implementing this trait can be chained with `.then(jig)` on the
@@ -60,6 +62,9 @@ pub trait Response: Sized {
         !self.is_ok()
     }
     /// Convert into an owned `Result`.
+    ///
+    /// # Errors
+    /// Returns `Err` with the error message when the response carries an error.
     fn into_result(self) -> Result<Self::Payload, String>;
     /// Wrap a `Result` into a response.
     fn from_result(result: Result<Self::Payload, String>) -> Self {
@@ -70,7 +75,11 @@ pub trait Response: Sized {
     }
     /// Non-consuming access to the error message, if this is an error.
     fn error_msg(&self) -> Option<String> {
-        None
+        if self.is_err() {
+            Some("unknown error".into())
+        } else {
+            None
+        }
     }
 
     /// Append a `Response -> Response` jig. The jig always runs, including
@@ -86,11 +95,26 @@ pub trait Response: Sized {
 
 /// Outcome of a guard jig: either continue with a (possibly transformed)
 /// request, or short-circuit the pipeline with a response.
+#[derive(Debug)]
 pub enum Branch<Req, Resp> {
     /// Continue the pipeline with this request.
     Continue(Req),
     /// Stop the pipeline and return this response.
     Done(Resp),
+}
+
+impl<Req, Resp> Branch<Req, Resp> {
+    /// Returns `true` if this is `Branch::Continue`.
+    #[must_use]
+    pub fn is_continue(&self) -> bool {
+        matches!(self, Branch::Continue(_))
+    }
+
+    /// Returns `true` if this is `Branch::Done`.
+    #[must_use]
+    pub fn is_done(&self) -> bool {
+        matches!(self, Branch::Done(_))
+    }
 }
 
 /// One step in a jigs pipeline. Any `Fn(In) -> Out` automatically implements
@@ -252,6 +276,7 @@ where
 {
     /// Append the next jig to a guarded pipeline. If the previous step was
     /// `Done`, its response is propagated and `jig` is not run.
+    #[allow(clippy::needless_pass_by_value)]
     pub fn then<J, Out>(self, jig: J) -> <Out as Merge<RESP>>::Merged
     where
         J: Jig<REQ, Out = Out>,

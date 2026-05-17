@@ -1,50 +1,11 @@
 //! Render the live `JigMeta` inventory as a single self-contained HTML page.
 
+use crate::index::{build_index, resolve, Index};
 use jigs_core::JigMeta;
 use std::collections::BTreeMap;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 const TEMPLATE: &str = include_str!("template.html");
-
-type Index = BTreeMap<&'static str, Vec<&'static JigMeta>>;
-
-fn build_index(jigs: impl Iterator<Item = &'static JigMeta>) -> Index {
-    let mut map: Index = BTreeMap::new();
-    for m in jigs {
-        map.entry(m.name).or_default().push(m);
-    }
-    map
-}
-
-fn resolve(name: &str, all: &Index) -> Option<&'static JigMeta> {
-    if let Some(v) = all.get(name) {
-        // When multiple jigs share the same short name, prefer the one
-        // with the shallowest module path (fewest segments). This makes
-        // the top-level pipeline entry win over feature-module handlers.
-        return v
-            .iter()
-            .min_by_key(|m| m.module.split("::").count())
-            .copied();
-    }
-    if let Some(pos) = name.rfind("::") {
-        let target_name = &name[pos + 2..];
-        let prefix = name[..pos].strip_prefix("crate::").unwrap_or(&name[..pos]);
-        if let Some(candidates) = all.get(target_name) {
-            for m in candidates {
-                if m.module.ends_with(prefix) || m.module.contains(&format!("::{}", prefix)) {
-                    return Some(m);
-                }
-            }
-            for m in candidates {
-                if m.file.contains(prefix) {
-                    return Some(m);
-                }
-            }
-            return candidates.first().copied();
-        }
-    }
-    None
-}
 
 /// Render the pipeline rooted at the entry jig (the first jig returned by
 /// the iterator) as a complete HTML document. `title` is shown in the page
@@ -57,10 +18,10 @@ fn resolve(name: &str, all: &Index) -> Option<&'static JigMeta> {
 /// when `None`, it renders as plain text. Common templates:
 ///
 /// - VS Code / Cursor / Windsurf: `vscode://file/{path}:{line}`
-/// - VSCodium: `vscodium://file/{path}:{line}`
-/// - JetBrains IDEs: `idea://open?file={path}&line={line}`
+/// - `VSCodium`: `vscodium://file/{path}:{line}`
+/// - `JetBrains` IDEs: `idea://open?file={path}&line={line}`
 /// - Sublime Text: `subl://{path}:{line}`
-/// - TextMate: `txmt://open/?url=file://{path}&line={line}`
+/// - `TextMate`: `txmt://open/?url=file://{path}&line={line}`
 /// - GitHub: `https://github.com/OWNER/REPO/blob/main/{rel_path}#L{line}`
 pub fn to_html(
     jigs: impl Iterator<Item = &'static JigMeta>,
@@ -121,20 +82,6 @@ fn encode(
         push_json_str(&mut s, key);
         s.push_str(":{\"file\":");
         push_json_str(&mut s, m.file);
-        s.push_str(",\"line\":");
-        s.push_str(&m.line.to_string());
-        s.push_str(",\"kind\":");
-        push_json_str(&mut s, m.kind);
-        s.push_str(",\"input\":");
-        push_json_str(&mut s, m.input);
-        s.push_str(",\"input_type\":");
-        push_json_str(&mut s, m.input_type);
-        s.push_str(",\"output_type\":");
-        push_json_str(&mut s, m.output_type);
-        s.push_str(",\"async\":");
-        s.push_str(if m.is_async { "true" } else { "false" });
-        s.push_str(",\"file_abs\":");
-        push_json_str(&mut s, &absolutize(m.file));
         s.push_str(",\"basename\":");
         push_json_str(&mut s, basename(m.file));
         s.push_str(",\"module\":");
@@ -164,20 +111,7 @@ fn encode(
 }
 
 fn push_json_str(out: &mut String, s: &str) {
-    out.push('"');
-    for ch in s.chars() {
-        match ch {
-            '"' => out.push_str("\\\""),
-            '\\' => out.push_str("\\\\"),
-            '\n' => out.push_str("\\n"),
-            '\r' => out.push_str("\\r"),
-            '\t' => out.push_str("\\t"),
-            '<' => out.push_str("\\u003c"),
-            c if (c as u32) < 0x20 => out.push_str(&format!("\\u{:04x}", c as u32)),
-            c => out.push(c),
-        }
-    }
-    out.push('"');
+    jigs_core::json::push_json_str(out, s, true);
 }
 
 fn basename(file: &str) -> &str {
@@ -185,20 +119,6 @@ fn basename(file: &str) -> &str {
         .file_name()
         .and_then(|n| n.to_str())
         .unwrap_or(file)
-}
-
-fn absolutize(file: &str) -> String {
-    let p = Path::new(file);
-    if p.is_absolute() {
-        return file.to_string();
-    }
-    match std::env::current_dir() {
-        Ok(cwd) => {
-            let joined: PathBuf = cwd.join(p);
-            joined.to_string_lossy().into_owned()
-        }
-        Err(_) => file.to_string(),
-    }
 }
 
 fn esc_attr(s: &str) -> String {
@@ -211,6 +131,7 @@ fn esc_attr(s: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::BTreeMap;
 
     fn meta(name: &'static str, kind: &'static str, chain: &[&'static str]) -> JigMeta {
         let v: Vec<jigs_core::ChainStep> = chain

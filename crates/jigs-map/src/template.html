@@ -500,11 +500,11 @@
       if (tmpl) {
         return tmpl
           .replace('{rel_path}', encodeURI(n.file || ''))
-          .replace('{path}', encodeURI(n.file_abs || n.file || ''))
+          .replace('{path}', encodeURI(n.file || ''))
           .replace('{line}', String(n.line));
       }
-      const path = n.file_abs || n.file;
-      const abs = path.startsWith('/') ? path : '/' + path;
+      const filePath = n.file || '';
+      const abs = filePath.startsWith('/') ? filePath : '/' + filePath;
       return 'file://' + encodeURI(abs);
     }
     function category(meta) {

@@ -15,7 +15,7 @@ async fn fetch_user(id: &str) -> String {
 
 async fn fetch_account(id: &str) -> u64 {
     tokio::time::sleep(Duration::from_millis(30)).await;
-    id.bytes().map(|b| b as u64).sum()
+    id.bytes().map(u64::from).sum()
 }
 
 #[derive(Clone, Request)]

@@ -1,6 +1,9 @@
+use std::fmt::Write;
+
 use jigs_trace::Entry;
 
 /// Render entries as a depth-indented tree with status mark and duration.
+#[must_use]
 pub fn render_tree(entries: &[Entry]) -> String {
     let labels: Vec<String> = entries
         .iter()
@@ -23,13 +26,7 @@ pub fn render_tree(entries: &[Entry]) -> String {
             Some(msg) => format!("ERROR: {msg}"),
             None => format!("{:?}", e.duration),
         };
-        out.push_str(&format!(
-            "{}{}  {}  {}\n",
-            label,
-            " ".repeat(pad),
-            mark,
-            detail
-        ));
+        let _ = writeln!(out, "{}{}  {}  {}", label, " ".repeat(pad), mark, detail);
     }
     out
 }
@@ -56,13 +53,13 @@ mod tests {
     }
 
     fn entry(name: &'static str, depth: usize, ok: bool, err: Option<&str>) -> Entry {
-        Entry {
-            meta: meta(name),
+        Entry::new(
+            meta(name),
             depth,
-            duration: Duration::from_micros(100),
+            Duration::from_micros(100),
             ok,
-            error: err.map(|s| s.to_string()),
-        }
+            err.map(|s| s.to_string()),
+        )
     }
 
     #[test]

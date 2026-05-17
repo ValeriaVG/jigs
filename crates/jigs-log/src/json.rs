@@ -4,6 +4,7 @@ use jigs_trace::Entry;
 ///
 /// Each object has fields: `name`, `depth`, `duration_ns`, `ok`, and `error`
 /// (omitted when absent).
+#[must_use]
 pub fn render_ndjson(entries: &[Entry]) -> String {
     let mut out = String::new();
     for e in entries {
@@ -28,7 +29,7 @@ fn push_field_str(out: &mut String, key: &str, value: &str) {
     out.push('"');
     out.push_str(key);
     out.push_str("\":");
-    push_json_str(out, value);
+    jigs_core::json::push_json_str(out, value, false);
 }
 
 fn push_field_num(out: &mut String, key: &str, value: u128) {
@@ -43,24 +44,6 @@ fn push_field_bool(out: &mut String, key: &str, value: bool) {
     out.push_str(key);
     out.push_str("\":");
     out.push_str(if value { "true" } else { "false" });
-}
-
-fn push_json_str(out: &mut String, s: &str) {
-    out.push('"');
-    for c in s.chars() {
-        match c {
-            '"' => out.push_str("\\\""),
-            '\\' => out.push_str("\\\\"),
-            '\n' => out.push_str("\\n"),
-            '\r' => out.push_str("\\r"),
-            '\t' => out.push_str("\\t"),
-            c if (c as u32) < 0x20 => {
-                out.push_str(&format!("\\u{:04x}", c as u32));
-            }
-            c => out.push(c),
-        }
-    }
-    out.push('"');
 }
 
 #[cfg(test)]
@@ -85,13 +68,13 @@ mod tests {
     }
 
     fn entry(name: &'static str, depth: usize, ok: bool, err: Option<&str>) -> Entry {
-        Entry {
-            meta: meta(name),
+        Entry::new(
+            meta(name),
             depth,
-            duration: Duration::from_nanos(1_500),
+            Duration::from_nanos(1_500),
             ok,
-            error: err.map(|s| s.to_string()),
-        }
+            err.map(|s| s.to_string()),
+        )
     }
 
     #[test]

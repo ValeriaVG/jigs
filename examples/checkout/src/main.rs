@@ -67,12 +67,9 @@ async fn run_bench(label: &str, n: usize, io_micros: u64) {
         let _ = jigs::trace::take();
     }
     let elapsed = started.elapsed();
-    let rps = (n as f64) / elapsed.as_secs_f64();
+    let avg_nanos = elapsed.as_nanos() / (n as u128);
     println!(
-        "\nbench [{label}, io={io_micros}us]: {n} requests in {:?} ({:.0} req/s, {:.1} us/req avg, ok={ok})",
-        elapsed,
-        rps,
-        elapsed.as_micros() as f64 / n as f64,
+        "\nbench [{label}, io={io_micros}us]: {n} requests in {elapsed:?} ({avg_nanos} ns/req avg, ok={ok})"
     );
 }
 

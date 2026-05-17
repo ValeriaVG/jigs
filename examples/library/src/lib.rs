@@ -35,12 +35,16 @@ pub extern "C" fn jigs_num_collected() -> usize {
     all_jigs().count()
 }
 
+/// # Panics
+/// Panics if `find_jig("handle")` returns `None`.
 #[no_mangle]
 pub extern "C" fn jigs_entry_name() -> *const u8 {
     let name = find_jig("handle").unwrap().name;
     name.as_ptr()
 }
 
+/// # Panics
+/// Panics if `find_jig("handle")` returns `None`.
 #[no_mangle]
 pub extern "C" fn jigs_entry_name_len() -> usize {
     find_jig("handle").unwrap().name.len()
@@ -48,9 +52,13 @@ pub extern "C" fn jigs_entry_name_len() -> usize {
 
 /// # Safety
 /// `input` must point to at least `input_len` valid bytes.
+///
+/// # Panics
+/// Panics if `find_jig("handle")` returns `None` or if the result string
+/// contains an interior NUL byte.
 #[no_mangle]
 pub unsafe extern "C" fn jigs_run_pipeline(input: *const u8, input_len: usize) -> *mut c_char {
-    let bytes = unsafe { std::slice::from_raw_parts(input, input_len) }.to_vec();
+    let bytes = std::slice::from_raw_parts(input, input_len).to_vec();
     let response = handle(BytesReq(bytes));
     let s = response.0.unwrap_or_else(|e| e);
     let c_str = std::ffi::CString::new(s).unwrap();

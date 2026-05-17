@@ -18,6 +18,8 @@
 //! }
 //! ```
 
+mod index;
+
 pub mod html;
 pub mod mermaid;
 

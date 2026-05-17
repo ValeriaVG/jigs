@@ -38,7 +38,7 @@ pub async fn embed(text: &str) -> Vec<f32> {
     io().await;
     let mut v = [0f32; 8];
     for (i, b) in text.bytes().enumerate() {
-        v[i % v.len()] += (b as f32) / 255.0;
+        v[i % v.len()] += f32::from(b) / 255.0;
     }
     let norm: f32 = v.iter().map(|x| x * x).sum::<f32>().sqrt().max(1e-6);
     v.iter().map(|x| x / norm).collect()
@@ -82,7 +82,12 @@ pub async fn vector_query(v: &[f32], k: usize, tenant: u64) -> Vec<Doc> {
         .map(|(i, (id, text))| Doc {
             id: format!("t{tenant}/{id}"),
             text: (*text).into(),
-            score: 0.95 - (i as f32) * 0.07,
+            score: [
+                0.95f32, 0.88, 0.81, 0.74, 0.67, 0.60, 0.53, 0.46, 0.39, 0.32,
+            ]
+            .get(i)
+            .copied()
+            .unwrap_or(0.25),
         })
         .take(k)
         .collect()

@@ -18,7 +18,7 @@ pub enum ChainKind {
 
 /// One entry in a jig's chain: the called jig's name plus how it was
 /// composed with the surrounding pipeline.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ChainStep {
     /// Name of the jig referenced at this step.
     pub name: &'static str,
@@ -27,7 +27,7 @@ pub struct ChainStep {
 }
 
 /// Static description of one jig.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct JigMeta {
     /// Function name as written in source.
     pub name: &'static str,

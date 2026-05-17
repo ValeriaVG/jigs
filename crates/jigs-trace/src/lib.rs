@@ -13,6 +13,8 @@ pub use jigs_core::JigMeta;
 pub use jigs_core::Status;
 
 /// One recorded jig invocation.
+#[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
 pub struct Entry {
     /// Compile-time metadata for the jig that ran.
     pub meta: &'static JigMeta,
@@ -28,8 +30,27 @@ pub struct Entry {
 
 impl Entry {
     /// Function name of the jig.
+    #[must_use]
     pub fn name(&self) -> &'static str {
         self.meta.name
+    }
+
+    /// Construct an `Entry` with the given fields.
+    #[must_use]
+    pub fn new(
+        meta: &'static JigMeta,
+        depth: usize,
+        duration: Duration,
+        ok: bool,
+        error: Option<String>,
+    ) -> Self {
+        Self {
+            meta,
+            depth,
+            duration,
+            ok,
+            error,
+        }
     }
 }
 
@@ -40,6 +61,7 @@ thread_local! {
 
 /// Record the start of a jig invocation. Returns an index used by [`exit`]
 /// to close the same entry. Called by code generated from `#[jig]`.
+#[must_use]
 pub fn enter(meta: &'static JigMeta) -> usize {
     let depth = DEPTH.with(|d| {
         let v = d.get();
@@ -74,6 +96,7 @@ pub fn exit(idx: usize, duration: Duration, ok: bool, error: Option<String>) {
 
 /// Drain the current thread's trace buffer and reset depth tracking.
 /// Call once per request after the pipeline finishes.
+#[must_use]
 pub fn take() -> Vec<Entry> {
     DEPTH.with(|d| d.set(0));
     BUFFER.with(|b| std::mem::take(&mut *b.borrow_mut()))

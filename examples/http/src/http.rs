@@ -1,4 +1,4 @@
-use std::io::{BufRead, BufReader, Read, Write};
+use std::io::{BufRead, BufReader, Write};
 use std::net::TcpStream;
 
 #[derive(Clone)]
@@ -75,10 +75,4 @@ pub fn write_response(stream: &mut TcpStream, resp: &HttpResponse) -> std::io::R
     stream.write_all(head.as_bytes())?;
     stream.write_all(body)?;
     stream.flush()
-}
-
-#[allow(dead_code)]
-pub fn drain<R: Read>(mut r: R) {
-    let mut sink = Vec::new();
-    let _ = r.read_to_end(&mut sink);
 }

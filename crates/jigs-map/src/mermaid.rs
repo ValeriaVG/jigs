@@ -8,49 +8,10 @@
 //! `last_leaf(composite) → b`, with `composite`'s own internals laid out
 //! inside its subgraph.
 
+use crate::index::{build_index, resolve, Index};
 use jigs_core::{ChainKind, JigMeta};
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{HashMap, HashSet};
 use std::fmt::Write;
-
-type Index = BTreeMap<&'static str, Vec<&'static JigMeta>>;
-
-fn build_index(jigs: impl Iterator<Item = &'static JigMeta>) -> Index {
-    let mut map: Index = BTreeMap::new();
-    for m in jigs {
-        map.entry(m.name).or_default().push(m);
-    }
-    map
-}
-
-fn resolve(name: &str, all: &Index) -> Option<&'static JigMeta> {
-    if let Some(v) = all.get(name) {
-        // When multiple jigs share the same short name, prefer the one
-        // with the shallowest module path (fewest segments). This makes
-        // the top-level pipeline entry win over feature-module handlers.
-        return v
-            .iter()
-            .min_by_key(|m| m.module.split("::").count())
-            .copied();
-    }
-    if let Some(pos) = name.rfind("::") {
-        let target_name = &name[pos + 2..];
-        let prefix = name[..pos].strip_prefix("crate::").unwrap_or(&name[..pos]);
-        if let Some(candidates) = all.get(target_name) {
-            for m in candidates {
-                if m.module.ends_with(prefix) || m.module.contains(&format!("::{}", prefix)) {
-                    return Some(m);
-                }
-            }
-            for m in candidates {
-                if m.file.contains(prefix) {
-                    return Some(m);
-                }
-            }
-            return candidates.first().copied();
-        }
-    }
-    None
-}
 
 /// Render the pipeline rooted at the entry jig (the first jig returned by
 /// the iterator) as a Mermaid `flowchart TD` document, without any surrounding
@@ -166,9 +127,7 @@ fn node_visual(name: &str, all: &Index) -> (&'static str, &'static str, String) 
     let out_ty = m.output_type;
     let (open, close, sig) = match (m.input, m.kind) {
         ("Request", "Request") => ("[", "]", format!("{in_ty} → {out_ty}")),
-        ("Request", "Response") => ("{", "}", format!("{in_ty} → {out_ty}")),
-        ("Request", "Branch") => ("{", "}", format!("{in_ty} → {out_ty}")),
-        ("Request", "Pending") => ("{", "}", format!("{in_ty} → {out_ty}")),
+        ("Request", "Response" | "Branch" | "Pending") => ("{", "}", format!("{in_ty} → {out_ty}")),
         ("Response", "Response") => ("([", "]])", format!("{in_ty} → {out_ty}")),
         _ => ("[", "]", "?".into()),
     };
@@ -183,7 +142,7 @@ fn node_visual(name: &str, all: &Index) -> (&'static str, &'static str, String) 
 /// jig that participates, so each can be declared exactly once.
 fn collect_leaves(name: &str, all: &Index, seen: &mut HashSet<usize>, out: &mut Vec<String>) {
     let Some(m) = resolve(name, all) else { return };
-    let ptr = m as *const _ as usize;
+    let ptr = std::ptr::from_ref(m) as usize;
     if !seen.insert(ptr) {
         return;
     }
@@ -206,7 +165,7 @@ fn emit(
     is_root: bool,
 ) {
     let Some(m) = resolve(name, all) else { return };
-    let ptr = m as *const _ as usize;
+    let ptr = std::ptr::from_ref(m) as usize;
     if m.chain.is_empty() {
         return;
     }
@@ -291,6 +250,7 @@ fn last_leaf<'a>(name: &'a str, all: &'a Index, seen: &mut HashSet<&'a str>) -> 
 mod tests {
     use super::*;
     use jigs_core::ChainStep;
+    use std::collections::BTreeMap;
 
     fn fake(items: Vec<JigMeta>) -> Index {
         let mut map: Index = BTreeMap::new();

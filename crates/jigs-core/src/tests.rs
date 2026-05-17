@@ -180,19 +180,11 @@ fn branch_done_short_circuits_to_response() {
     assert_eq!(out.into_result().unwrap_err(), "rejected");
 }
 
-fn block_on<F: std::future::Future>(mut fut: F) -> F::Output {
-    use std::pin::Pin;
-    use std::task::{Context, Poll, RawWaker, RawWakerVTable, Waker};
-    static VTABLE: RawWakerVTable = RawWakerVTable::new(
-        |_| RawWaker::new(std::ptr::null(), &VTABLE),
-        |_| {},
-        |_| {},
-        |_| {},
-    );
-    let raw = RawWaker::new(std::ptr::null(), &VTABLE);
-    let waker = unsafe { Waker::from_raw(raw) };
-    let mut cx = Context::from_waker(&waker);
-    let mut fut = unsafe { Pin::new_unchecked(&mut fut) };
+fn block_on<F: std::future::Future>(fut: F) -> F::Output {
+    use std::task::{Context, Poll, Waker};
+    let waker = Waker::noop();
+    let mut cx = Context::from_waker(waker);
+    let mut fut = std::pin::pin!(fut);
     loop {
         if let Poll::Ready(v) = fut.as_mut().poll(&mut cx) {
             return v;
@@ -228,6 +220,34 @@ fn pending_threads_value_through_sync_jig() {
     }
     let out = block_on(async { ReqI32(7).then(handle_async).then(shout).await });
     assert_eq!(out.into_result().unwrap(), "GOT 7");
+}
+
+#[test]
+fn block_on_polls_multi_yield_future() {
+    struct YieldTwice(u32);
+    impl std::future::Future for YieldTwice {
+        type Output = u32;
+        fn poll(
+            mut self: std::pin::Pin<&mut Self>,
+            cx: &mut std::task::Context<'_>,
+        ) -> std::task::Poll<u32> {
+            self.0 += 1;
+            if self.0 >= 3 {
+                std::task::Poll::Ready(self.0)
+            } else {
+                cx.waker().wake_by_ref();
+                std::task::Poll::Pending
+            }
+        }
+    }
+    let out = block_on(YieldTwice(0));
+    assert_eq!(out, 3);
+}
+
+#[test]
+fn block_on_resolves_ready_future() {
+    let out = block_on(async { 42 });
+    assert_eq!(out, 42);
 }
 
 #[test]
@@ -412,4 +432,58 @@ fn custom_response_implements_response_trait() {
 
     let out = ReqI32(42).then(handle).then(finalize);
     assert_eq!(out.into_result().unwrap(), "got 42 !");
+}
+
+#[test]
+fn default_error_msg_returns_some_on_err() {
+    struct MinResp(bool);
+    impl Response for MinResp {
+        type Payload = ();
+        fn ok(_: ()) -> Self {
+            MinResp(true)
+        }
+        fn err(_: impl Into<String>) -> Self {
+            MinResp(false)
+        }
+        fn is_ok(&self) -> bool {
+            self.0
+        }
+        fn into_result(self) -> Result<(), String> {
+            if self.0 {
+                Ok(())
+            } else {
+                Err(String::new())
+            }
+        }
+    }
+    impl Merge<MinResp> for MinResp {
+        type Merged = MinResp;
+        fn into_continue(self) -> Self::Merged {
+            self
+        }
+        fn from_done(resp: MinResp) -> Self::Merged {
+            resp
+        }
+    }
+    impl Status for MinResp {
+        fn succeeded(&self) -> bool {
+            self.is_ok()
+        }
+        fn error(&self) -> Option<String> {
+            self.error_msg()
+        }
+    }
+
+    let ok_resp = MinResp::ok(());
+    assert!(
+        ok_resp.error_msg().is_none(),
+        "ok response should have no error_msg"
+    );
+
+    let err_resp = MinResp::err("boom");
+    let msg = err_resp.error_msg().unwrap();
+    assert_eq!(
+        msg, "unknown error",
+        "default error_msg should return 'unknown error'"
+    );
 }
